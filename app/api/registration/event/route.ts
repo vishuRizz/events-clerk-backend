@@ -4,6 +4,12 @@ import Event from '@/models/Event';
 import Organization from '@/models/Organization';
 import { withOrganizationCheck } from '@/middleware/organizationExists';
 
+interface EventQuery {
+  organization: string;
+  event_type?: string;
+  is_online?: boolean;
+}
+
 export async function POST(req: NextRequest) {
   return withOrganizationCheck(req, async (req, organization) => {
     try {
@@ -128,7 +134,7 @@ export async function GET(req: NextRequest) {
       const is_online = searchParams.get('is_online');
 
       // Always filter by the organization from middleware
-      const query: any = { organization: organization._id };
+      const query: EventQuery = { organization: organization._id.toString() };
       
       // Add additional filters if provided
       if (event_type) query.event_type = event_type;
