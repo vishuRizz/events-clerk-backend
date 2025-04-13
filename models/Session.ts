@@ -1,0 +1,19 @@
+const SessionSchema = new mongoose.Schema({
+  event: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', required: true },
+  name: { type: String, required: true },
+  description: { type: String },
+  start_time: { type: Date, required: true },
+  end_time: { type: Date, required: true },
+  location: { type: String },
+  is_online: { type: Boolean, default: false },
+  online_url: { type: String },
+  max_capacity: { type: Number },
+  created_at: { type: Date, default: Date.now },
+  updated_at: { type: Date, default: Date.now },
+  created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'Profile' },
+  updated_by: { type: mongoose.Schema.Types.ObjectId, ref: 'Profile' }
+});
+
+import mongoose from 'mongoose';
+
+export default mongoose.models.Session || mongoose.model('Session', SessionSchema);
