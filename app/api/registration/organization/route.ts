@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Organization from '@/models/Organization';
-import User from '@/models/User';
 
 export async function POST(req: Request) {
   try {
@@ -35,29 +34,19 @@ export async function POST(req: Request) {
 
 export async function PUT(req: Request) {
   try {
-    const { organizationId, memberId, updates, requesterSupabaseId } = await req.json();
+    const { memberId, updates, requesterSupabaseId } = await req.json();
 
-    if (!organizationId || !requesterSupabaseId) {
+    if (!requesterSupabaseId) {
       return NextResponse.json(
-        { error: 'Organization ID and requesterSupabaseId are required' },
+        { error: 'requesterSupabaseId is required' },
         { status: 400 }
       );
     }
 
     await connectDB();
 
-    // Step 1: Get the requester User object
-    const requesterUser = await User.findOne({ supabaseId: requesterSupabaseId });
-
-    if (!requesterUser) {
-      return NextResponse.json(
-        { error: 'Unauthorized: requester not found' },
-        { status: 401 }
-      );
-    }
-
-    // Step 2: Fetch the organization
-    const organization = await Organization.findById(organizationId);
+    // Step 1: Fetch the organization
+    const organization = await Organization.findOne({ ownerSupabaseId: requesterSupabaseId });
 
     if (!organization) {
       return NextResponse.json(
@@ -66,27 +55,22 @@ export async function PUT(req: Request) {
       );
     }
 
-    // Step 3: Check if requester is the owner
-    if (organization.ownerId !== requesterSupabaseId) {
-      return NextResponse.json(
-        { error: 'Forbidden: Only the organization owner can perform this action' },
-        { status: 403 }
-      );
-    }
-
-    // Step 4: Prepare update data
-    const updateData: Record<string, unknown> = {}; // Replace `any` with `unknown`
+    // Step 3: Prepare update data
+    const updateData: Record<string, unknown> = {}; 
     if (updates) {
       Object.assign(updateData, updates);
     }
 
     if (memberId) {
-      updateData.$addToSet = { members: memberId }; // Using supabaseId directly
+      updateData.$addToSet = { members: memberId }; 
     }
 
-    // Step 5: Update organization
-    const updatedOrg = await Organization.findByIdAndUpdate(
-      organizationId,
+    // Set the updatedAt field to the current date
+    updateData.updatedAt = new Date();
+
+    // Step 4: Update organization
+    const updatedOrg = await Organization.findOneAndUpdate(
+      { ownerSupabaseId: requesterSupabaseId },
       updateData,
       { new: true }
     );
@@ -95,6 +79,41 @@ export async function PUT(req: Request) {
 
   } catch (error: unknown) {
     console.error(error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+
+export async function GET(req: Request) {
+  try {
+    // Extract ownerSupabaseId from headers
+    const ownerSupabaseId = req.headers.get('x-supabase-user-id');
+    
+    if (!ownerSupabaseId) {
+      return NextResponse.json(
+        { error: 'ownerSupabaseId header (x-supabase-user-id) is required' },
+        { status: 400 }
+      );
+    }
+
+    await connectDB();
+    
+    // Find organization by ownerSupabaseId
+    const organization = await Organization.findOne({ ownerSupabaseId })
+    
+    if (!organization) {
+      return NextResponse.json(
+        { error: 'Organization not found' },
+        { status: 404 }
+      );
+    }
+    
+    return NextResponse.json(organization, { status: 200 });
+  } catch (error: unknown) {
+    console.error('Error fetching organization:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
