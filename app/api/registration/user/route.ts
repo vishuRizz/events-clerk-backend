@@ -1,27 +1,74 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import User from '@/models/User';
+import Event from '@/models/Event'; 
 import { withUserAuth } from '@/middleware/userAuth';
+import mongoose from 'mongoose';
+
+// Define the interface for the populated event inside the registration
+interface PopulatedEvent {
+  _id: mongoose.Types.ObjectId;
+  name: string;
+  start_time: Date;
+}
+
+// Define the interface for the populated registration in user
+interface PopulatedRegistration {
+  event: PopulatedEvent;
+  registration_date: Date;
+  status: 'pending' | 'confirmed' | 'cancelled';
+}
 
 export async function GET(req: NextRequest) {
   return withUserAuth(req, async (authenticatedReq, user) => {
     try {
       console.log(authenticatedReq);
-      // User is already authenticated and retrieved in the middleware
-      // We can now return the user details
+      
+      // Connect to the database
+      await connectDB();
+      
+      // Make sure the Event model is loaded
+      const EventModel = Event;
+      console.log('Event model loaded:', !!EventModel); 
+      
+      // Fetch the user with populated event data, selecting only necessary fields
+      const populatedUser = await User.findById(user._id)
+        .populate({
+          path: 'registered_events.event',
+          model: 'Event',
+          select: 'name start_time' // Only select the fields we need
+        });
+      
+      if (!populatedUser) {
+        return NextResponse.json(
+          { error: 'User not found' },
+          { status: 404 }
+        );
+      }
+      
+      // Format the registered events data with only the requested fields
+      const registeredEvents = populatedUser.registered_events.map((registration: PopulatedRegistration) => ({
+        eventId: registration.event._id,
+        eventName: registration.event.name,
+        registrationDate: registration.registration_date,
+        eventStartTime: registration.event.start_time
+      }));
+      
+      // Return user details including simplified registered events
       return NextResponse.json({
         success: true,
         user: {
-          id: user._id,
-          supabaseId: user.supabaseId,
-          email: user.email,
-          fullName: user.fullName,
-          avatar_url: user.avatar_url,
-          phone: user.phone,
-          role: user.role,
-          last_sign_in_at: user.last_sign_in_at,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt
+          id: populatedUser._id,
+          supabaseId: populatedUser.supabaseId,
+          email: populatedUser.email,
+          fullName: populatedUser.fullName,
+          avatar_url: populatedUser.avatar_url,
+          phone: populatedUser.phone,
+          role: populatedUser.role,
+          last_sign_in_at: populatedUser.last_sign_in_at,
+          registered_events: registeredEvents,
+          createdAt: populatedUser.createdAt,
+          updatedAt: populatedUser.updatedAt
         }
       }, { status: 200 });
     } catch (error) {
