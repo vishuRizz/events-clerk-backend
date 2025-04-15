@@ -1,6 +1,38 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import User from '@/models/User';
+import { withUserAuth } from '@/middleware/userAuth';
+
+export async function GET(req: NextRequest) {
+  return withUserAuth(req, async (authenticatedReq, user) => {
+    try {
+      console.log(authenticatedReq);
+      // User is already authenticated and retrieved in the middleware
+      // We can now return the user details
+      return NextResponse.json({
+        success: true,
+        user: {
+          id: user._id,
+          supabaseId: user.supabaseId,
+          email: user.email,
+          fullName: user.fullName,
+          avatar_url: user.avatar_url,
+          phone: user.phone,
+          role: user.role,
+          last_sign_in_at: user.last_sign_in_at,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt
+        }
+      }, { status: 200 });
+    } catch (error) {
+      console.error('Error fetching user details:', error);
+      return NextResponse.json(
+        { error: 'Internal server error' },
+        { status: 500 }
+      );
+    }
+  });
+}
 
 export async function POST(req: Request) {
   try {
@@ -105,4 +137,4 @@ export async function PUT(req: Request) {
       { status: 500 }
     );
   }
-} 
+}
