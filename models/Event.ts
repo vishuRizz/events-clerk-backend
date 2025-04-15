@@ -23,6 +23,12 @@ const EventSchema = new mongoose.Schema({
   price: { type: Number, default: 0 },
   is_free: { type: Boolean, default: true },
   registration_deadline: { type: Date },
+  registered_users: [{
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'Profile' },
+    registration_date: { type: Date, default: Date.now },
+    status: { type: String, enum: ['pending', 'confirmed', 'cancelled'], default: 'pending' }
+  }],
+
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now },
   created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'Profile' },

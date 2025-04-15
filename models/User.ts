@@ -29,6 +29,12 @@ const UserSchema = new mongoose.Schema({
   last_sign_in_at: {
     type: Date,
   },
+  registered_events: [{
+    event: { type: mongoose.Schema.Types.ObjectId, ref: 'Event' },
+    registration_date: { type: Date, default: Date.now },
+    status: { type: String, enum: ['pending', 'confirmed', 'cancelled'], default: 'pending' }
+  }],
+
   createdAt: {
     type: Date,
     default: Date.now,
@@ -39,4 +45,22 @@ const UserSchema = new mongoose.Schema({
   },
 });
 
-export default mongoose.models.User || mongoose.model('User', UserSchema); 
+export default mongoose.models.User || mongoose.model('User', UserSchema);
+
+export interface IUser extends mongoose.Document {
+  _id: mongoose.Types.ObjectId;
+  supabaseId: string;
+  email: string;
+  fullName: string;
+  avatar_url?: string;
+  phone?: string;
+  role: 'user' | 'admin';
+  last_sign_in_at?: Date;
+  registered_events: {
+    event: mongoose.Types.ObjectId;
+    registration_date: Date;
+    status: 'pending' | 'confirmed' | 'cancelled';
+  }[];
+  createdAt: Date;
+  updatedAt: Date;
+}
