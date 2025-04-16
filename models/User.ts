@@ -34,7 +34,12 @@ const UserSchema = new mongoose.Schema({
     registration_date: { type: Date, default: Date.now },
     status: { type: String, enum: ['pending', 'confirmed', 'cancelled'], default: 'pending' }
   }],
-
+  registered_sessions: [{
+    session: { type: mongoose.Schema.Types.ObjectId, ref: 'Session' },
+    event: { type: mongoose.Schema.Types.ObjectId, ref: 'Event' },
+    registration_date: { type: Date, default: Date.now },
+    status: { type: String, enum: ['pending', 'confirmed', 'cancelled'], default: 'pending' }
+  }],
   createdAt: {
     type: Date,
     default: Date.now,
@@ -57,6 +62,12 @@ export interface IUser extends mongoose.Document {
   role: 'user' | 'admin';
   last_sign_in_at?: Date;
   registered_events: {
+    event: mongoose.Types.ObjectId;
+    registration_date: Date;
+    status: 'pending' | 'confirmed' | 'cancelled';
+  }[];
+  registered_sessions: {
+    session: mongoose.Types.ObjectId;
     event: mongoose.Types.ObjectId;
     registration_date: Date;
     status: 'pending' | 'confirmed' | 'cancelled';

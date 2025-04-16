@@ -24,15 +24,15 @@ const EventSchema = new mongoose.Schema({
   is_free: { type: Boolean, default: true },
   registration_deadline: { type: Date },
   registered_users: [{
-    user: { type: mongoose.Schema.Types.ObjectId, ref: 'Profile' },
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registration_date: { type: Date, default: Date.now },
     status: { type: String, enum: ['pending', 'confirmed', 'cancelled'], default: 'pending' }
   }],
-
+  sessions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Session' }],
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now },
-  created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'Profile' },
-  updated_by: { type: mongoose.Schema.Types.ObjectId, ref: 'Profile' }
+  created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  updated_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 });
 
 
