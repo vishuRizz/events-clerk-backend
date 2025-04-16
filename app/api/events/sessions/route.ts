@@ -6,18 +6,6 @@ import { IUser } from '@/models/User';
 import mongoose from 'mongoose';
 import { connectDB } from '@/lib/mongodb';
 
-interface SessionRegistration {
-  session: mongoose.Types.ObjectId;
-  registration_date: Date;
-  status: 'pending' | 'confirmed' | 'cancelled';
-}
-
-interface EventRegistration {
-  user: mongoose.Types.ObjectId;
-  registration_date: Date;
-  status: 'pending' | 'confirmed' | 'cancelled';
-}
-
 export async function POST(req: NextRequest) {
   return withUserAuth(req, async (req: NextRequest, user: IUser) => {
     try {

@@ -3,7 +3,6 @@ import { withUserAuth } from '@/middleware/userAuth';
 import Event from '@/models/Event';
 import Session from '@/models/Session';
 import { IUser } from '@/models/User';
-import mongoose from 'mongoose';
 import { connectDB } from '@/lib/mongodb';
 
 export async function POST(req: NextRequest) {
