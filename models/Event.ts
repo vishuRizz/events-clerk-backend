@@ -26,7 +26,9 @@ const EventSchema = new mongoose.Schema({
   registered_users: [{
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registration_date: { type: Date, default: Date.now },
-    status: { type: String, enum: ['pending', 'confirmed', 'cancelled'], default: 'pending' }
+    status: { type: String, enum: ['pending', 'confirmed', 'cancelled'], default: 'confirmed' },
+    attended: { type: Boolean, default: false },
+    check_in_time: { type: Date },
   }],
   sessions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Session' }],
   created_at: { type: Date, default: Date.now },

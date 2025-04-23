@@ -1,0 +1,1 @@
+as we added this   attended: { type: Boolean, default: false }, in the   registered_users: so let a user create a qr using its email, then the admin scans that qr gets the email and can mark the user as attended
