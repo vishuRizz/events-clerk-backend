@@ -9,11 +9,11 @@ export async function POST(req: NextRequest) {
     try {
       // Parse the request body
       const body = await req.json();
-      const { eventId, userId } = body;
+      const { eventId, supabaseId } = body;
 
-      if (!eventId || !userId) {
+      if (!eventId || !supabaseId) {
         return NextResponse.json(
-          { success: false, error: 'Event ID and User ID are required' },
+          { success: false, error: 'Event ID and Supabase ID are required' },
           { status: 400 }
         );
       }
@@ -33,8 +33,8 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Verify the user exists
-      const user = await User.findById(userId);
+      // Find the user by supabaseId instead of _id
+      const user = await User.findOne({ supabaseId });
       if (!user) {
         return NextResponse.json(
           { success: false, error: 'User not found' },
@@ -42,9 +42,10 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Find the user registration in the event
+      // Find the user registration in the event using user._id
       const registrationIndex = event.registered_users.findIndex(
-        (reg: { user: { toString: () => string }, status: string }) => reg.user.toString() === userId && reg.status === 'confirmed'
+        (reg: { user: { toString: () => string }, status: string }) => 
+          reg.user.toString() === user._id.toString() && reg.status === 'confirmed'
       );
 
       if (registrationIndex === -1) {
@@ -62,7 +63,8 @@ export async function POST(req: NextRequest) {
             message: 'User is already checked in',
             data: {
               eventId: event._id,
-              userId: userId,
+              userId: user._id,
+              supabaseId: user.supabaseId,
               checkInTime: event.registered_users[registrationIndex].check_in_time,
               alreadyCheckedIn: true
             }
@@ -80,7 +82,7 @@ export async function POST(req: NextRequest) {
       // Also update the user's registration record
       await User.updateOne(
         { 
-          _id: userId,
+          _id: user._id,
           'registered_events.event': eventId
         },
         {
@@ -98,7 +100,8 @@ export async function POST(req: NextRequest) {
           data: {
             eventId: event._id,
             eventName: event.name,
-            userId: userId,
+            userId: user._id,
+            supabaseId: user.supabaseId,
             userName: user.fullName,
             checkInTime: new Date(),
             alreadyCheckedIn: false
