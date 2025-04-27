@@ -32,13 +32,15 @@ const UserSchema = new mongoose.Schema({
   registered_events: [{
     event: { type: mongoose.Schema.Types.ObjectId, ref: 'Event' },
     registration_date: { type: Date, default: Date.now },
-    status: { type: String, enum: ['pending', 'confirmed', 'cancelled'], default: 'pending' }
+    status: { type: String, enum: ['pending', 'confirmed', 'cancelled'], default: 'confirmed' },
+    attended: { type: Boolean, default: false },
+    attendance_time: { type: Date }
   }],
   registered_sessions: [{
     session: { type: mongoose.Schema.Types.ObjectId, ref: 'Session' },
     event: { type: mongoose.Schema.Types.ObjectId, ref: 'Event' },
     registration_date: { type: Date, default: Date.now },
-    status: { type: String, enum: ['pending', 'confirmed', 'cancelled'], default: 'pending' }
+    status: { type: String, enum: ['pending', 'confirmed', 'cancelled'], default: 'confirmed' }
   }],
   createdAt: {
     type: Date,
@@ -65,6 +67,8 @@ export interface IUser extends mongoose.Document {
     event: mongoose.Types.ObjectId;
     registration_date: Date;
     status: 'pending' | 'confirmed' | 'cancelled';
+    attended: boolean;
+    attendance_time?: Date;
   }[];
   registered_sessions: {
     session: mongoose.Types.ObjectId;

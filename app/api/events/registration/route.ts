@@ -72,7 +72,9 @@ export async function POST(req: NextRequest) {
       user.registered_events.push({
         event: event._id,
         registration_date: new Date(),
-        status: 'pending'
+        status: 'confirmed',
+        attended: false, // Add the required attended field
+        attendance_time: undefined // Add the optional attendance_time field
       });
 
       // Save both the event and user
