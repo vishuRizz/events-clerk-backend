@@ -11,7 +11,7 @@ const SessionSchema = new mongoose.Schema({
   registrations: [{
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     registration_date: { type: Date, default: Date.now },
-    status: { type: String, enum: ['pending', 'confirmed', 'cancelled'], default: 'pending' }
+    status: { type: String, enum: ['pending', 'confirmed', 'cancelled'], default: 'confirmed' }
   }],
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now },

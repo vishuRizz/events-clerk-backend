@@ -9,7 +9,7 @@ const EventRegistrationSchema = new mongoose.Schema({
   ticket_code: { type: String, unique: true },
   payment_status: { 
     type: String, 
-    default: 'pending',
+    default: 'confirmed',
     enum: ['pending', 'completed', 'failed', 'refunded']
   },
   payment_amount: { type: Number },
