@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       event.registered_users.push({
         user: user._id,
         registration_date: new Date(),
-        status: 'pending'
+        status: 'confirmed'
       });
 
       // Add event to user's registered_events array
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
           data: {
             eventId: event._id,
             registrationDate: new Date(),
-            status: 'pending'
+            status: 'confirmed'
           }
         },
         { status: 200 }
