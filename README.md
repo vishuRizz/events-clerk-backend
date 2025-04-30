@@ -4,3 +4,5 @@ as we added this   attended: { type: Boolean, default: false }, in the   registe
 
 - create a new api that gives back all the event details
 - i think allegedly the current api we are using is just returning the specific orgs events
+
+
