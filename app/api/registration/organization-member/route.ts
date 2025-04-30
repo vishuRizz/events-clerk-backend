@@ -1,24 +1,40 @@
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Organization from '@/models/Organization';
+import User from '@/models/User';
 
 export async function POST(req: Request) {
   try {
-    const { organization, profile, role } = await req.json();
+    const { organizationId, email, role } = await req.json();
 
-    if (!organization || !profile || !role) {
+    if (!organizationId || !email || !role) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields: organizationId, email, and role are required' },
         { status: 400 }
       );
     }
 
     await connectDB();
 
+    // Find the user by email instead of Supabase ID
+    const user = await User.findOne({ email: email });
+    
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
     // Update the Organization.members array if not already present
+    // Still store the Supabase ID in the members array for consistency
     const updatedOrganization = await Organization.findByIdAndUpdate(
-      organization,
-      { $addToSet: { members: profile } }, // ensures no duplicates
+      organizationId,
+      { 
+        $addToSet: { 
+          members: user.supabaseId  // Store the Supabase ID from the found user
+        } 
+      },
       { new: true }
     );
 
