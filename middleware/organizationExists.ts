@@ -48,15 +48,20 @@ export async function withOrganizationCheck(
     // Connect to the database
     await connectDB();
 
-    // Check if an organization exists with the specified ownerSupabaseId
-    const organization = await Organization.findOne({ ownerSupabaseId: supabaseUserId });
+    // First check if the user is an owner of any organization
+    let organization = await Organization.findOne({ ownerSupabaseId: supabaseUserId });
 
-    // If no organization is found, return a 404 Not Found response
+    // If not an owner, check if the user is a member of any organization
     if (!organization) {
-      return NextResponse.json(
-        { error: 'Organization not found for this user' },
-        { status: 404 }
-      );
+      organization = await Organization.findOne({ members: supabaseUserId });
+      
+      // If still no organization is found, return a 404 Not Found response
+      if (!organization) {
+        return NextResponse.json(
+          { error: 'Organization not found for this user' },
+          { status: 404 }
+        );
+      }
     }
 
     // Create a new headers object (Next.js request headers are immutable)
