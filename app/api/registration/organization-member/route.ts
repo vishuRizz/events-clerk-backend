@@ -45,6 +45,14 @@ export async function POST(req: Request) {
       );
     }
 
+    console.log('updating role of user');
+    // Update the user's role to 'admin'
+    await User.findByIdAndUpdate(
+      
+      user._id,
+      { role: 'admin' }
+    );
+
     return NextResponse.json(updatedOrganization, { status: 200 });
   } catch (error: unknown) {
     console.error(error);
