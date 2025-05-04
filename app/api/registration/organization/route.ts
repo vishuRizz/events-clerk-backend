@@ -89,26 +89,32 @@ export async function PUT(req: Request) {
 
 export async function GET(req: Request) {
   try {
-    // Extract ownerSupabaseId from headers
-    const ownerSupabaseId = req.headers.get('x-supabase-user-id');
+    // Extract user ID from headers
+    const userId = req.headers.get('x-supabase-user-id');
     
-    if (!ownerSupabaseId) {
+    if (!userId) {
       return NextResponse.json(
-        { error: 'ownerSupabaseId header (x-supabase-user-id) is required' },
+        { error: 'User ID header (x-supabase-user-id) is required' },
         { status: 400 }
       );
     }
 
     await connectDB();
     
-    // Find organization by ownerSupabaseId
-    const organization = await Organization.findOne({ ownerSupabaseId })
-    
+    // First check if the user is an owner of any organization
+    let organization = await Organization.findOne({ ownerSupabaseId: userId });
+
+    // If not an owner, check if the user is a member of any organization
     if (!organization) {
-      return NextResponse.json(
-        { error: 'Organization not found' },
-        { status: 404 }
-      );
+      organization = await Organization.findOne({ members: userId });
+      
+      // If still no organization is found, return a 404 Not Found response
+      if (!organization) {
+        return NextResponse.json(
+          { error: 'Organization not found' },
+          { status: 404 }
+        );
+      }
     }
     
     return NextResponse.json(organization, { status: 200 });
