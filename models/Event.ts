@@ -23,6 +23,11 @@ const EventSchema = new mongoose.Schema({
   price: { type: Number, default: 0 },
   is_free: { type: Boolean, default: true },
   registration_deadline: { type: Date },
+  foodCoupons: [{
+    name: { type: String, required: true },
+    couponDescription: { type: String },
+    quantity: { type: Number, default: 0 }
+  }],
   registered_users: [{
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     registration_date: { type: Date, default: Date.now },
