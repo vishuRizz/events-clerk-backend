@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withUserAuth } from '@/middleware/userAuth';
+import { createClient } from '@supabase/supabase-js'; // Added missing import
+import { withOrganizationCheck } from '@/middleware/organizationExists';
 import Event from '@/models/Event';
 import Session from '@/models/Session';
-import { IUser } from '@/models/User';
+import User from '@/models/User';
 import { connectDB } from '@/lib/mongodb';
 
 export async function POST(req: NextRequest) {
-  return withUserAuth(req, async (req: NextRequest, user: IUser) => {
+  return withOrganizationCheck(req, async (req: NextRequest, organization) => {
     try {
+      console.log('Session creation started');
+      
       // Connect to the database
       await connectDB();
+      console.log('Connected to database');
       
       // Parse the request body
       const body = await req.json();
@@ -24,8 +28,10 @@ export async function POST(req: NextRequest) {
         online_url, 
         max_capacity 
       } = body;
+      console.log('Request body parsed:', { eventId, name });
 
       if (!eventId || !name || !start_time || !end_time) {
+        console.log('Missing required fields');
         return NextResponse.json(
           { success: false, error: 'Event ID, name, start time, and end time are required' },
           { status: 400 }
@@ -33,28 +39,48 @@ export async function POST(req: NextRequest) {
       }
 
       // Find the event and check if it exists
-      const event = await Event.findById(eventId);
+      console.log('Finding event with ID:', eventId);
+      const event = await Event.findById(eventId).populate('organization');
       if (!event) {
+        console.log('Event not found');
         return NextResponse.json(
           { success: false, error: 'Event not found' },
           { status: 404 }
         );
       }
-
-      // Check if the user has permission to create sessions for this event
-      // This assumes that only event organizers or admins can create sessions
-      // You might want to implement a more sophisticated permission system
-      const isAdmin = user.role === 'admin';
-      const isEventOrganizer = event.created_by && event.created_by.toString() === user._id.toString();
+      console.log('Event found:', event.name);
       
-      if (!isAdmin && !isEventOrganizer) {
+      // Check if the event belongs to the organization
+      if (event.organization._id.toString() !== organization._id.toString()) {
+        console.log('Event does not belong to this organization');
         return NextResponse.json(
           { success: false, error: 'You do not have permission to create sessions for this event' },
           { status: 403 }
         );
       }
+      
+      // Get the user ID from Supabase token
+      const accessToken = req.headers.get('x-supabase-auth');
+      const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+      const { data } = await supabase.auth.getUser(accessToken!);
+      const supabaseUserId = data.user!.id;
+      
+      // Find or create the user
+      let user = await User.findOne({ supabaseId: supabaseUserId });
+      if (!user) {
+        // Create a basic user record if one doesn't exist
+        user = await User.create({
+          supabaseId: supabaseUserId,
+          email: data.user!.email || 'unknown@example.com',
+          fullName: data.user!.user_metadata?.full_name || 'User',
+          role: 'user'
+        });
+      }
+      
+      console.log('User found/created, proceeding to create session');
 
       // Create the new session
+      console.log('Creating new session');
       const newSession = await Session.create({
         event: eventId,
         name,
@@ -68,11 +94,29 @@ export async function POST(req: NextRequest) {
         created_by: user._id,
         updated_by: user._id
       });
+      console.log('New session created with ID:', newSession._id);
 
       // Add the session to the event's sessions array
+      console.log('Adding session to event');
       event.sessions.push(newSession._id);
       await event.save();
+      console.log('Event updated with new session');
+      
+      // Add the session to the user's registered_sessions array
+      console.log('Adding session to user profile');
+      await User.findByIdAndUpdate(user._id, {
+        $push: {
+          registered_sessions: {
+            session: newSession._id,
+            event: eventId,
+            registration_date: new Date(),
+            status: 'confirmed'
+          }
+        }
+      });
+      console.log('User profile updated with new session');
 
+      console.log('Session creation completed successfully');
       return NextResponse.json(
         { 
           success: true, 
@@ -90,4 +134,4 @@ export async function POST(req: NextRequest) {
       );
     }
   });
-} 
+}
