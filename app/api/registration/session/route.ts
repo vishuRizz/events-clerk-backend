@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withUserAuth } from '@/middleware/userAuth';
+import { createClient } from '@supabase/supabase-js'; // Added missing import
+import { withOrganizationCheck } from '@/middleware/organizationExists';
 import Event from '@/models/Event';
 import Session from '@/models/Session';
-import Organization from '@/models/Organization';
-import OrganizationMember from '@/models/OrganizationMember';
 import User from '@/models/User';
-import { IUser } from '@/models/User';
 import { connectDB } from '@/lib/mongodb';
 
 export async function POST(req: NextRequest) {
-  return withUserAuth(req, async (req: NextRequest, user: IUser) => {
+  return withOrganizationCheck(req, async (req: NextRequest, organization) => {
     try {
       console.log('Session creation started');
-      console.log('User data:', JSON.stringify(user));
       
       // Connect to the database
       await connectDB();
@@ -52,54 +49,35 @@ export async function POST(req: NextRequest) {
         );
       }
       console.log('Event found:', event.name);
-      console.log('Organization ID from event:', event.organization._id);
-
-      // Get the organization
-      console.log('Finding organization');
-      const organization = await Organization.findById(event.organization._id);
-      if (!organization) {
-        console.log('Organization not found');
-        return NextResponse.json(
-          { success: false, error: 'Organization not found' },
-          { status: 404 }
-        );
-      }
-      console.log('Organization found:', organization.name);
-      console.log('Organization members:', organization.members);
-      console.log('User supabaseId:', user.supabaseId);
       
-      // Check if the user is a member of the organization
-      let isOrgMember = false;
-      
-      // Check if user is in the organization's members array
-      if (organization.members.includes(user.supabaseId)) {
-        console.log('User found in organization members array');
-        isOrgMember = true;
-      } else {
-        console.log('User not found in organization members array, checking OrganizationMember collection');
-        // If not found in members array, check the OrganizationMember collection
-        const orgMember = await OrganizationMember.findOne({
-          organization: event.organization._id,
-          profile: user._id
-        });
-        
-        if (orgMember) {
-          console.log('User found in OrganizationMember collection');
-          isOrgMember = true;
-        } else {
-          console.log('User not found in OrganizationMember collection');
-        }
-      }
-      
-      if (!isOrgMember) {
-        console.log('User is not a member of the organization');
+      // Check if the event belongs to the organization
+      if (event.organization._id.toString() !== organization._id.toString()) {
+        console.log('Event does not belong to this organization');
         return NextResponse.json(
           { success: false, error: 'You do not have permission to create sessions for this event' },
           { status: 403 }
         );
       }
       
-      console.log('User is a member of the organization, proceeding to create session');
+      // Get the user ID from Supabase token
+      const accessToken = req.headers.get('x-supabase-auth');
+      const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+      const { data } = await supabase.auth.getUser(accessToken!);
+      const supabaseUserId = data.user!.id;
+      
+      // Find or create the user
+      let user = await User.findOne({ supabaseId: supabaseUserId });
+      if (!user) {
+        // Create a basic user record if one doesn't exist
+        user = await User.create({
+          supabaseId: supabaseUserId,
+          email: data.user!.email || 'unknown@example.com',
+          fullName: data.user!.user_metadata?.full_name || 'User',
+          role: 'user'
+        });
+      }
+      
+      console.log('User found/created, proceeding to create session');
 
       // Create the new session
       console.log('Creating new session');
