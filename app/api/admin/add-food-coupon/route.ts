@@ -39,8 +39,14 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // Determine the next available id for the new food coupon
+      const nextId = event.foodCoupons.length > 0 
+        ? Math.max(...event.foodCoupons.map((coupon: { id: number }) => coupon.id || 0)) + 1
+        : 1;
+
       // Add the food coupon to the event
       event.foodCoupons.push({
+        id: nextId,  // Assign the calculated id
         name: foodCoupon.name,
         couponDescription: foodCoupon.couponDescription || '',
         quantity: foodCoupon.quantity || 0
