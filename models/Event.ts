@@ -24,7 +24,7 @@ const EventSchema = new mongoose.Schema({
   is_free: { type: Boolean, default: true },
   registration_deadline: { type: Date },
   foodCoupons: [{
-    id: { type: Number, required: true },  // Add this line for incrementing id
+    id: { type: Number, required: true }, 
     name: { type: String, required: true },
     couponDescription: { type: String },
     quantity: { type: Number, default: 0 }

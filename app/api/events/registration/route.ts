@@ -73,8 +73,9 @@ export async function POST(req: NextRequest) {
         event: event._id,
         registration_date: new Date(),
         status: 'confirmed',
-        attended: false, // Add the required attended field
-        attendance_time: undefined // Add the optional attendance_time field
+        attended: false,
+        attendance_time: undefined,
+        couponsUsed: [] 
       });
 
       // Save both the event and user
