@@ -1,3 +1,5 @@
+import mongoose from 'mongoose';
+
 const SessionSchema = new mongoose.Schema({
   event: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', required: true },
   name: { type: String, required: true },
@@ -15,10 +17,8 @@ const SessionSchema = new mongoose.Schema({
   }],
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now },
-  created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'Profile' },
-  updated_by: { type: mongoose.Schema.Types.ObjectId, ref: 'Profile' }
+  created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  updated_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 });
-
-import mongoose from 'mongoose';
 
 export default mongoose.models.Session || mongoose.model('Session', SessionSchema);

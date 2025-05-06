@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withUserAuth } from '@/middleware/userAuth';
 import Event from '@/models/Event';
 import Session from '@/models/Session';
+import Organization from '@/models/Organization';
+import OrganizationMember from '@/models/OrganizationMember';
 import { IUser } from '@/models/User';
 import { connectDB } from '@/lib/mongodb';
 
@@ -33,7 +35,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Find the event and check if it exists
-      const event = await Event.findById(eventId);
+      const event = await Event.findById(eventId).populate('organization');
       if (!event) {
         return NextResponse.json(
           { success: false, error: 'Event not found' },
@@ -42,12 +44,31 @@ export async function POST(req: NextRequest) {
       }
 
       // Check if the user has permission to create sessions for this event
-      // This assumes that only event organizers or admins can create sessions
-      // You might want to implement a more sophisticated permission system
       const isAdmin = user.role === 'admin';
       const isEventOrganizer = event.created_by && event.created_by.toString() === user._id.toString();
       
-      if (!isAdmin && !isEventOrganizer) {
+      // Check if the user is a member of the organization
+      let isOrgMember = false;
+      
+      // First check if user is in the organization's members array
+      const organization = await Organization.findById(event.organization._id);
+      if (organization && organization.members.includes(user.supabaseId)) {
+        isOrgMember = true;
+      }
+      
+      // If not found in members array, check the OrganizationMember collection
+      if (!isOrgMember) {
+        const orgMember = await OrganizationMember.findOne({
+          organization: event.organization._id,
+          profile: user._id
+        });
+        
+        if (orgMember) {
+          isOrgMember = true;
+        }
+      }
+      
+      if (!isAdmin && !isEventOrganizer && !isOrgMember) {
         return NextResponse.json(
           { success: false, error: 'You do not have permission to create sessions for this event' },
           { status: 403 }
@@ -90,4 +111,4 @@ export async function POST(req: NextRequest) {
       );
     }
   });
-} 
+}
