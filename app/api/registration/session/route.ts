@@ -111,13 +111,25 @@ export async function POST(req: NextRequest) {
       // Find or create the user
       let user = await User.findOne({ supabaseId: supabaseUserId });
       if (!user) {
-        // Create a basic user record if one doesn't exist
-        user = await User.create({
-          supabaseId: supabaseUserId,
-          email: data.user.email || 'unknown@example.com',
-          fullName: data.user.user_metadata?.full_name || 'User',
-          role: 'user'
-        });
+        // First try to find a user with the same email
+        user = await User.findOne({ email: data.user.email });
+        
+        if (user) {
+          // If a user with this email exists but has a different supabaseId,
+          // update the supabaseId to match the current one
+          user.supabaseId = supabaseUserId;
+          await user.save();
+          console.log('Updated existing user with new Supabase ID');
+        } else {
+          // Create a new user only if no user with this email exists
+          user = await User.create({
+            supabaseId: supabaseUserId,
+            email: data.user.email || 'unknown@example.com',
+            fullName: data.user.user_metadata?.full_name || 'User',
+            role: 'user'
+          });
+          console.log('Created new user');
+        }
       }
       
       console.log('User found/created, proceeding to create session');
