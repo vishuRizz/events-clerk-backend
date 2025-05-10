@@ -40,7 +40,9 @@ const EventSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now },
   created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  updated_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  updated_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  // Add this to the EventSchema
+  resources: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Resource' }],
 });
 
 
