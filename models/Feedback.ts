@@ -14,7 +14,7 @@ const FeedbackSchema = new mongoose.Schema({
   questions: [{
     id: { type: Number, required: true },
     question: { type: String, required: true },
-    answer: { type: String, required: true },
+    answer: { type: String, required: false }, // Changed to not required
     created_at: { type: Date, default: Date.now }
   }],
   created_at: { type: Date, default: Date.now }
