@@ -121,62 +121,46 @@ export async function POST(req: NextRequest) {
 
 // Get feedback questions for an event
 export async function GET(req: NextRequest) {
-  return withOrganizationCheck(req, async (req, organization) => {
-    try {
-      await connectDB();
-      
-      // Get event ID from query params
-      const { searchParams } = new URL(req.url);
-      const eventId = searchParams.get('eventId');
-      
-      if (!eventId) {
-        return NextResponse.json(
-          { success: false, error: 'Event ID is required' },
-          { status: 400 }
-        );
-      }
-      
-      // Validate that the event belongs to this organization
-      const event = await Event.findOne({
-        _id: eventId,
-        organization: organization._id
-      });
-
-      if (!event) {
-        return NextResponse.json(
-          { success: false, error: 'Event not found or does not belong to this organization' },
-          { status: 404 }
-        );
-      }
-      
-      // Find feedback template for this event
-      const feedbackTemplate = await Feedback.findOne({ 
-        event: eventId,
-        user: { $exists: false } // Template has no user assigned
-      });
-      
-      if (!feedbackTemplate) {
-        return NextResponse.json(
-          { success: false, error: 'No feedback questions found for this event' },
-          { status: 404 }
-        );
-      }
-      
+  try {
+    await connectDB();
+    
+    // Get event ID from headers
+    const eventId = req.headers.get('x-event-id');
+    
+    if (!eventId) {
       return NextResponse.json(
-        { success: true, data: feedbackTemplate },
-        { status: 200 }
-      );
-      
-    } catch (error) {
-      console.error('Error fetching feedback questions:', error);
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Failed to fetch feedback questions', 
-          details: error instanceof Error ? error.message : 'Unknown error' 
-        },
-        { status: 500 }
+        { success: false, error: 'Event ID is required in x-event-id header' },
+        { status: 400 }
       );
     }
-  });
+    
+    // Find feedback template for this event
+    const feedbackTemplate = await Feedback.findOne({ 
+      event: eventId,
+      user: { $exists: false } // Template has no user assigned
+    });
+    
+    if (!feedbackTemplate) {
+      return NextResponse.json(
+        { success: false, error: 'No feedback questions found for this event' },
+        { status: 404 }
+      );
+    }
+    
+    return NextResponse.json(
+      { success: true, data: feedbackTemplate },
+      { status: 200 }
+    );
+    
+  } catch (error) {
+    console.error('Error fetching feedback questions:', error);
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: 'Failed to fetch feedback questions', 
+        details: error instanceof Error ? error.message : 'Unknown error' 
+      },
+      { status: 500 }
+    );
+  }
 }
