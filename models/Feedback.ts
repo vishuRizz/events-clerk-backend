@@ -1,8 +1,9 @@
+import mongoose from 'mongoose';
+
 // Feedback Schema
 const FeedbackSchema = new mongoose.Schema({
   event: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', required: true },
-  session: { type: mongoose.Schema.Types.ObjectId, ref: 'Session' },
-  profile: { type: mongoose.Schema.Types.ObjectId, ref: 'Profile' },
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   rating: { 
     type: Number,
     min: 1,
@@ -10,8 +11,13 @@ const FeedbackSchema = new mongoose.Schema({
   },
   comment: { type: String },
   is_anonymous: { type: Boolean, default: false },
+  questions: [{
+    id: { type: Number, required: true },
+    question: { type: String, required: true },
+    answer: { type: String, required: true },
+    created_at: { type: Date, default: Date.now }
+  }],
   created_at: { type: Date, default: Date.now }
 });
-import mongoose from 'mongoose';
 
 export default mongoose.models.Feedback || mongoose.model('Feedback', FeedbackSchema);
