@@ -56,27 +56,53 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Create feedback template with questions
-      const feedbackTemplate = {
+      // Check if a feedback template already exists for this event
+      const existingTemplate = await Feedback.findOne({ 
         event: eventId,
-        questions: questions.map((q: FeedbackQuestion) => ({
+        user: { $exists: false } // Template has no user assigned
+      });
+
+      let feedback;
+      
+      if (existingTemplate) {
+        // Update existing template
+        existingTemplate.questions = questions.map((q: FeedbackQuestion) => ({
           id: q.id,
           question: q.question,
           answer: '', // This will be filled by users
           created_at: new Date()
-        }))
-      };
-
-      // Save the feedback template
-      const feedback = await Feedback.create(feedbackTemplate);
+        }));
+        
+        feedback = await existingTemplate.save();
+      } else {
+        // Create new feedback template with questions
+        const feedbackTemplate = {
+          event: eventId,
+          questions: questions.map((q: FeedbackQuestion) => ({
+            id: q.id,
+            question: q.question,
+            answer: '', // This will be filled by users
+            created_at: new Date()
+          }))
+        };
+        
+        // Save the feedback template
+        feedback = await Feedback.create(feedbackTemplate);
+        
+        // Add the feedback reference to the event
+        await Event.findByIdAndUpdate(
+          eventId,
+          { $push: { feedback: feedback._id } }
+        );
+      }
 
       return NextResponse.json(
         { 
           success: true, 
-          message: 'Feedback questions added successfully',
+          message: existingTemplate ? 'Feedback questions updated successfully' : 'Feedback questions added successfully',
           data: feedback
         },
-        { status: 201 }
+        { status: existingTemplate ? 200 : 201 }
       );
 
     } catch (error) {
