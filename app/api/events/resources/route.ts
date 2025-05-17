@@ -50,12 +50,18 @@ export async function GET(req: NextRequest) {
 }
 
 // POST create a new resource
+// In the POST function
 export async function POST(req: NextRequest) {
   return withOrganizationCheck(req, async (req, organization) => {
     try {
       await connectDB();
       
+      console.log('Processing resource upload request');
       const formData = await req.formData();
+      
+      // Log the form data keys
+      console.log('Form data keys:', Array.from(formData.keys()));
+      
       const eventId = formData.get('eventId') as string;
       const name = formData.get('name') as string;
       const description = formData.get('description') as string;
@@ -63,6 +69,14 @@ export async function POST(req: NextRequest) {
       const content = formData.get('content') as string;
       const createdBy = formData.get('createdBy') as string;
       const file = formData.get('file') as File;
+      
+      console.log('Resource type:', resourceType);
+      console.log('File received:', file ? 'Yes' : 'No');
+      if (file) {
+        console.log('File type:', file.type);
+        console.log('File name:', file.name);
+        console.log('File size:', file.size);
+      }
       
       if (!eventId) {
         return NextResponse.json(
@@ -112,20 +126,35 @@ export async function POST(req: NextRequest) {
         resourceData.content = content;
       } else if (file) {
         // Upload file to Cloudinary
-        const arrayBuffer = await file.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        
-        const uploadResult = await uploadToCloudinary(buffer, {
-          resource_type: resourceType === 'video' ? 'video' : 'auto',
-          folder: `events/${eventId}/resources`
-        });
-        
-        resourceData.file_url = uploadResult.secure_url;
-        resourceData.file_type = file.type;
-        
-        // If it's a video, store the thumbnail URL
-        if (resourceType === 'video' && uploadResult.thumbnail_url) {
-          resourceData.thumbnail_url = uploadResult.thumbnail_url;
+        // When uploading to Cloudinary
+        if (file) {
+          try {
+            console.log('Converting file to buffer...');
+            const arrayBuffer = await file.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+            console.log('Buffer created, size:', buffer.length);
+            
+            console.log('Uploading to Cloudinary...');
+            const uploadResult = await uploadToCloudinary(buffer, {
+              resource_type: resourceType === 'video' ? 'video' : 'auto',
+              folder: `events/${eventId}/resources`
+            });
+            console.log('Cloudinary upload result:', uploadResult);
+            
+            resourceData.file_url = uploadResult.secure_url;
+            resourceData.file_type = file.type;
+            
+            // If it's a video, store the thumbnail URL
+            if (resourceType === 'video' && uploadResult.thumbnail_url) {
+              resourceData.thumbnail_url = uploadResult.thumbnail_url;
+            }
+          } catch (uploadError) {
+            console.error('Cloudinary upload error:', uploadError);
+            return NextResponse.json(
+              { success: false, error: `File upload failed: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}` },
+              { status: 500 }
+            );
+          }
         }
       } else {
         return NextResponse.json(
@@ -144,7 +173,7 @@ export async function POST(req: NextRequest) {
     } catch (error) {
       console.error('Error creating resource:', error);
       return NextResponse.json(
-        { success: false, error: 'Failed to create resource' },
+        { success: false, error: `Failed to create resource: ${error instanceof Error ? error.message : 'Unknown error'}` },
         { status: 500 }
       );
     }
