@@ -8,13 +8,33 @@ const OrganizationSchema = new mongoose.Schema({
   description: {
     type: String,
   },
-  logo_url: { type: String },
-  banner_url: { type: String },
-  domain: { type: String },
-  type: { type: String },
-  contact_email: { type: String },
-  contact_phone: { type: String },
-  website: { type: String },
+  logo_url: { 
+    type: String 
+  },
+  logo_public_id: { 
+    type: String 
+  },
+  banner_url: { 
+    type: String 
+  },
+  banner_public_id: { 
+    type: String 
+  },
+  domain: { 
+    type: String 
+  },
+  type: { 
+    type: String 
+  },
+  contact_email: { 
+    type: String 
+  },
+  contact_phone: { 
+    type: String 
+  },
+  website: { 
+    type: String 
+  },
   ownerSupabaseId: {
     type: String,
     required: true,
