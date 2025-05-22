@@ -6,3 +6,4 @@ as we added this   attended: { type: Boolean, default: false }, in the   registe
 - i think allegedly the current api we are using is just returning the specific orgs events
 
 
+get user details route is not secured by org session token
