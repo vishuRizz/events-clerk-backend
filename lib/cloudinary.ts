@@ -29,7 +29,21 @@ interface CloudinaryResponse {
   thumbnail_url?: string;
 }
 
+// At the top of the file after the config
+console.log('Cloudinary Configuration:', {
+  cloudName: process.env.CLOUDINARY_CLOUD_NAME ? 'Set' : 'Missing',
+  apiKey: process.env.CLOUDINARY_API_KEY ? 'Set' : 'Missing',
+  apiSecret: process.env.CLOUDINARY_API_SECRET ? 'Set' : 'Missing'
+});
+
+// In the uploadToCloudinary function
 export const uploadToCloudinary = (buffer: Buffer, options: UploadOptions = {}): Promise<CloudinaryResponse> => {
+  console.log('Starting Cloudinary upload with options:', {
+    resourceType: options.resource_type,
+    folder: options.folder,
+    bufferSize: buffer.length
+  });
+
   return new Promise((resolve, reject) => {
     const uploadOptions: UploadApiOptions = {
       resource_type: options.resource_type || 'auto',
@@ -40,9 +54,17 @@ export const uploadToCloudinary = (buffer: Buffer, options: UploadOptions = {}):
     };
     
     cloudinary.uploader.upload_stream(uploadOptions, (error, result) => {
-      if (error || !result) {
+      if (error) {
+        console.error('Cloudinary upload error:', error);
         reject(new Error(error?.message || 'Upload failed'));
+      } else if (!result) {
+        console.error('No result from Cloudinary');
+        reject(new Error('Upload failed - no result'));
       } else {
+        console.log('Cloudinary upload successful:', {
+          publicId: result.public_id,
+          url: result.secure_url
+        });
         resolve(result as unknown as CloudinaryResponse);
       }
     }).end(buffer);

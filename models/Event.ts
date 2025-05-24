@@ -17,7 +17,9 @@ const EventSchema = new mongoose.Schema({
   is_online: { type: Boolean, default: false },
   online_url: { type: String },
   poster_url: { type: String },
+  poster_public_id: { type: String },
   banner_url: { type: String },
+  banner_public_id: { type: String },
   event_type: { type: String },
   max_capacity: { type: Number },
   price: { type: Number, default: 0 },
@@ -44,6 +46,5 @@ const EventSchema = new mongoose.Schema({
   resources: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Resource' }],
   feedback: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Feedback' }]
 });
-
 
 export default mongoose.models.Event || mongoose.model('Event', EventSchema);
