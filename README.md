@@ -7,3 +7,4 @@ as we added this   attended: { type: Boolean, default: false }, in the   registe
 
 
 get user details route is not secured by org session token
+changes
