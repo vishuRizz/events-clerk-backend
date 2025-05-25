@@ -72,7 +72,8 @@ export async function withRoleCheck(
     });
 
     // Call the handler function with the role and user ID
-    return handler(newRequest, role, organization._id.toString());
+    // Pass the organization ID if it exists, otherwise pass the supabaseUserId
+    return handler(newRequest, role, organization ? organization._id.toString() : supabaseUserId);
   } catch (error) {
     console.error('Error in role check middleware:', error);
     return NextResponse.json(
