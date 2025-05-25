@@ -1,5 +1,4 @@
 import { v2 as cloudinary } from 'cloudinary';
-import { UploadApiOptions } from 'cloudinary';
 
 // Configure Cloudinary
 cloudinary.config({
@@ -9,18 +8,13 @@ cloudinary.config({
   secure: true // Always use HTTPS
 });
 
-interface UploadOptions extends Omit<UploadApiOptions, 'resource_type'> {
-  resource_type?: 'auto' | 'image' | 'video' | 'raw';
-  folder?: string;
-  public_id?: string;
-  overwrite?: boolean;
-}
-
 interface CloudinaryResponse {
   success: boolean;
   url?: string;
   thumbnail_url?: string;
   error?: string;
+  secure_url?: string;
+  public_id?: string;
 }
 
 interface CloudinaryUploadResult {
@@ -43,24 +37,21 @@ console.log('Cloudinary Configuration:', {
 });
 
 // In the uploadToCloudinary function
-export async function uploadToCloudinary(file: File): Promise<CloudinaryResponse> {
+export async function uploadToCloudinary(file: Buffer, options?: Record<string, unknown>): Promise<CloudinaryResponse> {
   try {
-    // Convert File to Buffer
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    
     // Upload to Cloudinary
     const result = await new Promise<CloudinaryUploadResult>((resolve, reject) => {
       cloudinary.uploader.upload_stream(
         {
           resource_type: 'auto',
-          folder: 'events/resources'
+          folder: 'events/resources',
+          ...options
         },
         (error, result) => {
           if (error) reject(error);
           else resolve(result as CloudinaryUploadResult);
         }
-      ).end(buffer);
+      ).end(file);
     });
     
     if (!result || !result.secure_url) {
@@ -70,7 +61,9 @@ export async function uploadToCloudinary(file: File): Promise<CloudinaryResponse
     return {
       success: true,
       url: result.secure_url,
-      thumbnail_url: result.secure_url // For now, use the same URL for thumbnail
+      thumbnail_url: result.secure_url,
+      secure_url: result.secure_url,
+      public_id: result.public_id
     };
   } catch (error) {
     console.error('Cloudinary upload error:', error);

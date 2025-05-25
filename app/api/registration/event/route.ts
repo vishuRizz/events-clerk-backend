@@ -4,6 +4,7 @@ import Event from '@/models/Event';
 import Organization from '@/models/Organization';
 import { withOrganizationCheck } from '@/middleware/organizationExists';
 import { uploadToCloudinary } from '@/lib/cloudinary';
+import { connectDB } from '@/lib/mongodb';
 
 interface EventQuery {
   organization: string;
@@ -65,216 +66,200 @@ interface EventUpdateData {
 export async function POST(req: NextRequest) {
   return withOrganizationCheck(req, async (req, organization) => {
     try {
-      const contentType = req.headers.get('content-type');
+      console.log('Starting event creation process');
+      await connectDB();
       
-      if (contentType?.includes('multipart/form-data')) {
-        // Handle form data with potential file uploads
-        console.log('Processing multipart form data for event creation');
-        const formData = await req.formData();
-        
-        console.log('Form data keys:', Array.from(formData.keys()));
-        
-        // Extract files
-        const posterFile = formData.get('posterFile') as File | null;
-        const bannerFile = formData.get('bannerFile') as File | null;
-        
-        // Extract text fields
-        const name = formData.get('name') as string;
-        const description = formData.get('description') as string;
-        const start_time = formData.get('start_time') as string;
-        const end_time = formData.get('end_time') as string;
-        const is_online = formData.get('is_online') === 'true';
-        const online_url = formData.get('online_url') as string;
-        const event_type = formData.get('event_type') as string;
-        const max_capacity = formData.get('max_capacity') as string;
-        const price = formData.get('price') as string;
-        const is_free = formData.get('is_free') === 'true';
-        const registration_deadline = formData.get('registration_deadline') as string;
-        const created_by = formData.get('created_by') as string;
-        
-        // Extract venue fields
-        const venueName = formData.get('venue_name') as string;
-        const venueAddress = formData.get('venue_address') as string;
-        const venueCity = formData.get('venue_city') as string;
-        const venueState = formData.get('venue_state') as string;
-        const venueZip = formData.get('venue_zip') as string;
-        const venueCountry = formData.get('venue_country') as string;
+      const formData = await req.formData();
+      console.log('FormData received:', Object.fromEntries(formData.entries()));
+      
+      // Extract and validate required fields
+      const name = formData.get('name') as string;
+      const description = formData.get('description') as string;
+      const eventType = formData.get('event_type') as string;
+      const startTime = formData.get('start_time') as string;
+      const endTime = formData.get('end_time') as string;
+      const isOnline = formData.get('is_online') === 'true';
+      const isFree = formData.get('is_free') === 'true';
+      
+      console.log('Extracted fields:', { name, description, eventType, startTime, endTime, isOnline, isFree });
+      
+      // Validate required fields
+      if (!name || !description || !eventType || !startTime || !endTime) {
+        console.error('Missing required fields:', { name, description, eventType, startTime, endTime });
+        return NextResponse.json(
+          { error: 'Missing required fields' },
+          { status: 400 }
+        );
+      }
 
-        console.log('Poster file received:', posterFile ? 'Yes' : 'No');
-        console.log('Banner file received:', bannerFile ? 'Yes' : 'No');
+      // Validate dates
+      const startDateTime = new Date(startTime);
+      const endDateTime = new Date(endTime);
+      
+      console.log('Parsed dates:', { startDateTime, endDateTime });
+      
+      if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) {
+        console.error('Invalid date/time values:', { startTime, endTime });
+        return NextResponse.json(
+          { error: 'Invalid date/time values' },
+          { status: 400 }
+        );
+      }
 
-        if (!name || !start_time || !end_time || !created_by) {
-          return NextResponse.json(
-            { error: 'Missing required fields' },
-            { status: 400 }
-          );
+      if (endDateTime <= startDateTime) {
+        console.error('End date must be after start date:', { startDateTime, endDateTime });
+        return NextResponse.json(
+          { error: 'End date must be after start date' },
+          { status: 400 }
+        );
+      }
+
+      // Prepare event data
+      const eventData: EventData = {
+        name,
+        description,
+        event_type: eventType,
+        start_time: startDateTime,
+        end_time: endDateTime,
+        is_online: isOnline,
+        is_free: isFree,
+        organization: organization._id,
+        created_by: organization._id,
+        updated_by: organization._id // required by EventData interface
+      };
+
+      // Add optional fields if they exist
+      const maxCapacity = formData.get('max_capacity');
+      if (maxCapacity) {
+        eventData.max_capacity = parseInt(maxCapacity as string);
+      }
+
+      const price = formData.get('price');
+      if (price && !isFree) {
+        eventData.price = parseFloat(price as string);
+      }
+
+      const onlineUrl = formData.get('online_url');
+      if (isOnline && typeof onlineUrl === 'string' && onlineUrl) {
+        eventData.online_url = onlineUrl;
+      }
+
+      const registrationDeadline = formData.get('registration_deadline');
+      if (typeof registrationDeadline === 'string' && registrationDeadline) {
+        const deadlineDateTime = new Date(registrationDeadline as string);
+        if (!isNaN(deadlineDateTime.getTime()) && deadlineDateTime < startDateTime) {
+          eventData.registration_deadline = deadlineDateTime;
         }
+      }
 
-        // Prepare event data
-        const eventData: EventData = {
-          organization: organization._id.toString(),
-          name,
-          description: description || undefined,
-          start_time: new Date(start_time),
-          end_time: new Date(end_time),
-          is_online,
-          online_url: online_url || undefined,
-          event_type: event_type || undefined,
-          max_capacity: max_capacity ? parseInt(max_capacity) : undefined,
-          price: price ? parseFloat(price) : undefined,
-          is_free,
-          registration_deadline: registration_deadline ? new Date(registration_deadline) : undefined,
-          created_by,
-          updated_by: created_by
-        };
+      // Handle venue data for in-person events
+      if (!isOnline) {
+        const venueName = formData.get('venue_name');
+        const venueAddress = formData.get('venue_address');
+        const venueCity = formData.get('venue_city');
+        const venueState = formData.get('venue_state');
+        const venueZip = formData.get('venue_zip');
+        const venueCountry = formData.get('venue_country');
 
-        // Handle venue data for in-person events
-        if (!is_online && venueName) {
+        if (venueName) {
           eventData.venue = {
-            name: venueName,
-            address: venueAddress || undefined,
-            city: venueCity || undefined,
-            state: venueState || undefined,
-            postal_code: venueZip || undefined,
-            country: venueCountry || 'Unknown'
+            name: venueName as string,
+            address: venueAddress ? (venueAddress as string) : undefined,
+            city: venueCity ? (venueCity as string) : undefined,
+            state: venueState ? (venueState as string) : undefined,
+            postal_code: venueZip ? (venueZip as string) : undefined,
+            country: venueCountry ? (venueCountry as string) : 'Unknown'
           };
         }
+      }
 
-        // Handle poster upload
-        if (posterFile && posterFile.size > 0) {
-          try {
-            console.log('Uploading poster to Cloudinary...');
-            const arrayBuffer = await posterFile.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-            
-            const uploadResult = await uploadToCloudinary(buffer, {
-              resource_type: 'image',
-              folder: `events/posters`,
-              transformation: [
-                { width: 600, height: 800, crop: 'fill' },
-                { quality: 'auto' },
-                { fetch_format: 'auto' }
-              ]
-            });
+      // Handle poster upload
+      const posterFile = formData.get('posterFile') as File;
+      if (posterFile && posterFile.size > 0) {
+        try {
+          console.log('Processing poster upload...');
+          const arrayBuffer = await posterFile.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          
+          console.log('Uploading poster to Cloudinary...');
+          const uploadResult = await uploadToCloudinary(buffer, {
+            resource_type: 'image',
+            folder: `events/posters`,
+            transformation: [
+              { width: 600, height: 800, crop: 'fill' },
+              { quality: 'auto' },
+              { fetch_format: 'auto' }
+            ]
+          });
 
-            eventData.poster_url = uploadResult.secure_url;
-            eventData.poster_public_id = uploadResult.public_id;
-          } catch (uploadError) {
-            console.error('Poster upload error:', uploadError);
-            return NextResponse.json(
-              { error: `Poster upload failed: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}` },
-              { status: 500 }
-            );
+          if (!uploadResult.success) {
+            throw new Error(uploadResult.error || 'Failed to upload poster');
           }
-        }
 
-        // Handle banner upload
-        if (bannerFile && bannerFile.size > 0) {
-          try {
-            console.log('Uploading banner to Cloudinary...');
-            const arrayBuffer = await bannerFile.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-            
-            const uploadResult = await uploadToCloudinary(buffer, {
-              resource_type: 'image',
-              folder: `events/banners`,
-              transformation: [
-                { width: 1200, height: 400, crop: 'fill' },
-                { quality: 'auto' },
-                { fetch_format: 'auto' }
-              ]
-            });
-
-            eventData.banner_url = uploadResult.secure_url;
-            eventData.banner_public_id = uploadResult.public_id;
-          } catch (uploadError) {
-            console.error('Banner upload error:', uploadError);
-            return NextResponse.json(
-              { error: `Banner upload failed: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}` },
-              { status: 500 }
-            );
-          }
-        }
-
-        // Create the event
-        const event = await Event.create(eventData);
-
-        // Update the organization document to include the new event ID
-        await Organization.findByIdAndUpdate(
-          organization._id,
-          { $push: { events: event._id } },
-          { new: true }
-        );
-
-        console.log('Event created successfully with images');
-        return NextResponse.json(event, { status: 201 });
-
-      } else {
-        // Handle JSON data (existing functionality)
-        console.log('Processing JSON request for event creation');
-        const {
-          name,
-          description,
-          start_time,
-          end_time,
-          venue,
-          is_online,
-          online_url,
-          poster_url,
-          banner_url,
-          event_type,
-          max_capacity,
-          price,
-          is_free,
-          registration_deadline,
-          created_by
-        } = await req.json();
-
-        if (!name || !start_time || !end_time || !created_by) {
+          eventData.poster_url = uploadResult.secure_url;
+          eventData.poster_public_id = uploadResult.public_id;
+          console.log('Poster uploaded successfully:', uploadResult.secure_url);
+        } catch (uploadError) {
+          console.error('Poster upload error:', uploadError);
           return NextResponse.json(
-            { error: 'Missing required fields' },
-            { status: 400 }
+            { error: `Poster upload failed: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}` },
+            { status: 500 }
           );
         }
-
-        // Use the organization ID from the middleware
-        const organizationId = organization._id;
-
-        const eventData: EventData = {
-          organization: organizationId.toString(),
-          name,
-          description,
-          start_time: new Date(start_time),
-          end_time: new Date(end_time),
-          venue,
-          is_online,
-          online_url,
-          poster_url,
-          banner_url,
-          event_type,
-          max_capacity,
-          price,
-          is_free,
-          registration_deadline: registration_deadline ? new Date(registration_deadline) : undefined,
-          created_by,
-          updated_by: created_by
-        };
-
-        const event = await Event.create(eventData);
-
-        // Update the organization document to include the new event ID
-        await Organization.findByIdAndUpdate(
-          organizationId,
-          { $push: { events: event._id } },
-          { new: true }
-        );
-
-        return NextResponse.json(event, { status: 201 });
       }
-    } catch (error: unknown) {
-      console.error('Error in POST /api/events:', error);
+
+      // Handle banner upload
+      const bannerFile = formData.get('bannerFile') as File;
+      if (bannerFile && bannerFile.size > 0) {
+        try {
+          console.log('Processing banner upload...');
+          const arrayBuffer = await bannerFile.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          
+          console.log('Uploading banner to Cloudinary...');
+          const uploadResult = await uploadToCloudinary(buffer, {
+            resource_type: 'image',
+            folder: `events/banners`,
+            transformation: [
+              { width: 1200, height: 400, crop: 'fill' },
+              { quality: 'auto' },
+              { fetch_format: 'auto' }
+            ]
+          });
+
+          if (!uploadResult.success) {
+            throw new Error(uploadResult.error || 'Failed to upload banner');
+          }
+
+          eventData.banner_url = uploadResult.secure_url;
+          eventData.banner_public_id = uploadResult.public_id;
+          console.log('Banner uploaded successfully:', uploadResult.secure_url);
+        } catch (uploadError) {
+          console.error('Banner upload error:', uploadError);
+          return NextResponse.json(
+            { error: `Banner upload failed: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}` },
+            { status: 500 }
+          );
+        }
+      }
+
+      console.log('Creating event in database...');
+      // Create the event
+      const event = await Event.create(eventData);
+
+      // Update the organization document to include the new event ID
+      await Organization.findByIdAndUpdate(
+        organization._id,
+        { $push: { events: event._id } },
+        { new: true }
+      );
+
+      console.log('Event created successfully:', event._id);
+      return NextResponse.json({ success: true, data: event }, { status: 201 });
+    } catch (error) {
+      console.error('Error creating event:', error);
       return NextResponse.json(
-        { error: 'Internal server error' },
+        { error: error instanceof Error ? error.message : 'Failed to create event' },
         { status: 500 }
       );
     }

@@ -11,7 +11,7 @@ import { uploadToCloudinary } from '@/lib/cloudinary';
 interface ResourceData {
   event: string;
   name: string;
-  description?: string;
+  description: string;
   resource_type: string;
   created_by: string;
   content?: string;
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
       }
       
       // Prepare resource data
-      const resourceData: any = {
+      const resourceData: ResourceData = {
         event: eventId,
         name,
         description,
@@ -127,7 +127,9 @@ export async function POST(req: NextRequest) {
         resourceData.content = content;
       } else if (file) {
         // Upload file to Cloudinary
-        const uploadResult = await uploadToCloudinary(file);
+        const arrayBuffer = await file.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const uploadResult = await uploadToCloudinary(buffer);
         
         if (!uploadResult.success) {
           return NextResponse.json(
