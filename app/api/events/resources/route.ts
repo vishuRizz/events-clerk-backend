@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import {connectDB} from '@/lib/mongodb';
 import Resource from '@/models/Resource';
 import Event from '@/models/Event';
+import Notification from '@/models/Notification';
+import UserNotification from '@/models/UserNotification';
+import User from '@/models/User';
 import { withOrganizationCheck } from '@/middleware/organizationExists';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 
@@ -50,7 +53,6 @@ export async function GET(req: NextRequest) {
 }
 
 // POST create a new resource
-// In the POST function
 export async function POST(req: NextRequest) {
   return withOrganizationCheck(req, async (req, organization) => {
     try {
@@ -105,8 +107,8 @@ export async function POST(req: NextRequest) {
         );
       }
       
-      // Create resource object
-      const resourceData: ResourceData = {
+      // Prepare resource data
+      const resourceData: any = {
         event: eventId,
         name,
         description,
@@ -122,39 +124,24 @@ export async function POST(req: NextRequest) {
             { status: 400 }
           );
         }
-        
         resourceData.content = content;
       } else if (file) {
         // Upload file to Cloudinary
-        // When uploading to Cloudinary
-        if (file) {
-          try {
-            console.log('Converting file to buffer...');
-            const arrayBuffer = await file.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-            console.log('Buffer created, size:', buffer.length);
-            
-            console.log('Uploading to Cloudinary...');
-            const uploadResult = await uploadToCloudinary(buffer, {
-              resource_type: resourceType === 'video' ? 'video' : 'auto',
-              folder: `events/${eventId}/resources`
-            });
-            console.log('Cloudinary upload result:', uploadResult);
-            
-            resourceData.file_url = uploadResult.secure_url;
-            resourceData.file_type = file.type;
-            
-            // If it's a video, store the thumbnail URL
-            if (resourceType === 'video' && uploadResult.thumbnail_url) {
-              resourceData.thumbnail_url = uploadResult.thumbnail_url;
-            }
-          } catch (uploadError) {
-            console.error('Cloudinary upload error:', uploadError);
-            return NextResponse.json(
-              { success: false, error: `File upload failed: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}` },
-              { status: 500 }
-            );
-          }
+        const uploadResult = await uploadToCloudinary(file);
+        
+        if (!uploadResult.success) {
+          return NextResponse.json(
+            { success: false, error: uploadResult.error },
+            { status: 500 }
+          );
+        }
+        
+        resourceData.file_url = uploadResult.url;
+        resourceData.file_type = file.type;
+        
+        // If it's an image or video, also store the thumbnail
+        if (resourceType === 'image' || resourceType === 'video') {
+          resourceData.thumbnail_url = uploadResult.thumbnail_url;
         }
       } else {
         return NextResponse.json(
@@ -165,6 +152,31 @@ export async function POST(req: NextRequest) {
       
       // Create the resource
       const resource = await Resource.create(resourceData);
+      
+      // Create a notification for the new resource
+      const notification = await Notification.create({
+        event: eventId,
+        title: 'New Resource Available',
+        message: `A new ${resourceType} resource "${name}" has been shared for the event "${event.name}"`,
+        is_in_app: true,
+        created_by: organization._id
+      });
+      
+      // Get all registered users for this event
+      const registeredUsers = await User.find({
+        'registered_events.event': eventId,
+        'registered_events.status': 'confirmed'
+      });
+      
+      // Create user notifications for each registered user
+      await Promise.all(
+        registeredUsers.map(user =>
+          UserNotification.create({
+            notification: notification._id,
+            profile: user._id
+          })
+        )
+      );
       
       return NextResponse.json(
         { success: true, data: resource },

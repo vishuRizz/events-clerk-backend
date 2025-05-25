@@ -17,6 +17,13 @@ interface UploadOptions extends Omit<UploadApiOptions, 'resource_type'> {
 }
 
 interface CloudinaryResponse {
+  success: boolean;
+  url?: string;
+  thumbnail_url?: string;
+  error?: string;
+}
+
+interface CloudinaryUploadResult {
   secure_url: string;
   public_id: string;
   format: string;
@@ -26,7 +33,6 @@ interface CloudinaryResponse {
   width?: number;
   height?: number;
   folder?: string;
-  thumbnail_url?: string;
 }
 
 // At the top of the file after the config
@@ -37,39 +43,43 @@ console.log('Cloudinary Configuration:', {
 });
 
 // In the uploadToCloudinary function
-export const uploadToCloudinary = (buffer: Buffer, options: UploadOptions = {}): Promise<CloudinaryResponse> => {
-  console.log('Starting Cloudinary upload with options:', {
-    resourceType: options.resource_type,
-    folder: options.folder,
-    bufferSize: buffer.length
-  });
-
-  return new Promise((resolve, reject) => {
-    const uploadOptions: UploadApiOptions = {
-      resource_type: options.resource_type || 'auto',
-      folder: options.folder || 'events',
-      public_id: options.public_id,
-      overwrite: options.overwrite !== undefined ? options.overwrite : true,
-      ...options
-    };
+export async function uploadToCloudinary(file: File): Promise<CloudinaryResponse> {
+  try {
+    // Convert File to Buffer
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
     
-    cloudinary.uploader.upload_stream(uploadOptions, (error, result) => {
-      if (error) {
-        console.error('Cloudinary upload error:', error);
-        reject(new Error(error?.message || 'Upload failed'));
-      } else if (!result) {
-        console.error('No result from Cloudinary');
-        reject(new Error('Upload failed - no result'));
-      } else {
-        console.log('Cloudinary upload successful:', {
-          publicId: result.public_id,
-          url: result.secure_url
-        });
-        resolve(result as unknown as CloudinaryResponse);
-      }
-    }).end(buffer);
-  });
-};
+    // Upload to Cloudinary
+    const result = await new Promise<CloudinaryUploadResult>((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        {
+          resource_type: 'auto',
+          folder: 'events/resources'
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result as CloudinaryUploadResult);
+        }
+      ).end(buffer);
+    });
+    
+    if (!result || !result.secure_url) {
+      throw new Error('Upload failed: No URL returned');
+    }
+    
+    return {
+      success: true,
+      url: result.secure_url,
+      thumbnail_url: result.secure_url // For now, use the same URL for thumbnail
+    };
+  } catch (error) {
+    console.error('Cloudinary upload error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown upload error'
+    };
+  }
+}
 
 // Add a utility function to delete files
 export const deleteFromCloudinary = async (publicId: string, resourceType: 'auto' | 'image' | 'video' | 'raw' = 'image'): Promise<boolean> => {
