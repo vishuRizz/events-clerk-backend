@@ -10,6 +10,7 @@ export async function PATCH(req: NextRequest) {
     
     // Get notification ID from URL
     const notificationId = req.url.split('/').pop();
+    console.log('[Notifications] Marking notification as read:', notificationId);
     
     if (!notificationId) {
       return NextResponse.json(
@@ -20,6 +21,7 @@ export async function PATCH(req: NextRequest) {
     
     // Get user ID from headers
     const userId = req.headers.get('x-supabase-user-id');
+    console.log('[Notifications] User ID from headers:', userId);
     
     if (!userId) {
       return NextResponse.json(
@@ -30,6 +32,7 @@ export async function PATCH(req: NextRequest) {
     
     // Find the user
     const user = await User.findOne({ supabaseId: userId });
+    console.log('[Notifications] Found user:', user?._id);
     
     if (!user) {
       return NextResponse.json(
@@ -41,7 +44,7 @@ export async function PATCH(req: NextRequest) {
     // Find and update the user notification
     const userNotification = await UserNotification.findOneAndUpdate(
       {
-        notification: notificationId,
+        _id: notificationId,
         profile: user._id
       },
       {
@@ -50,6 +53,8 @@ export async function PATCH(req: NextRequest) {
       },
       { new: true }
     );
+    
+    console.log('[Notifications] Updated notification:', userNotification);
     
     if (!userNotification) {
       return NextResponse.json(
@@ -63,7 +68,7 @@ export async function PATCH(req: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error('Error marking notification as read:', error);
+    console.error('[Notifications] Error marking notification as read:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to mark notification as read' },
       { status: 500 }
