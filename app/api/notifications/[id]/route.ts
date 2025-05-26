@@ -13,6 +13,7 @@ export async function PATCH(req: NextRequest) {
     console.log('[Notifications] Marking notification as read:', notificationId);
     
     if (!notificationId) {
+      console.log('[Notifications] No notification ID provided');
       return NextResponse.json(
         { success: false, error: 'Notification ID is required' },
         { status: 400 }
@@ -24,6 +25,7 @@ export async function PATCH(req: NextRequest) {
     console.log('[Notifications] User ID from headers:', userId);
     
     if (!userId) {
+      console.log('[Notifications] No user ID provided in headers');
       return NextResponse.json(
         { success: false, error: 'User ID is required' },
         { status: 400 }
@@ -35,13 +37,30 @@ export async function PATCH(req: NextRequest) {
     console.log('[Notifications] Found user:', user?._id);
     
     if (!user) {
+      console.log('[Notifications] User not found for ID:', userId);
       return NextResponse.json(
         { success: false, error: 'User not found' },
         { status: 404 }
       );
     }
     
-    // Find and update the user notification
+    // Find the notification first to verify it exists
+    const existingNotification = await UserNotification.findOne({
+      _id: notificationId,
+      profile: user._id
+    });
+    
+    console.log('[Notifications] Existing notification:', existingNotification?._id);
+    
+    if (!existingNotification) {
+      console.log('[Notifications] Notification not found for ID:', notificationId);
+      return NextResponse.json(
+        { success: false, error: 'Notification not found' },
+        { status: 404 }
+      );
+    }
+    
+    // Update the notification
     const userNotification = await UserNotification.findOneAndUpdate(
       {
         _id: notificationId,
@@ -54,12 +73,13 @@ export async function PATCH(req: NextRequest) {
       { new: true }
     );
     
-    console.log('[Notifications] Updated notification:', userNotification);
+    console.log('[Notifications] Updated notification:', userNotification?._id);
     
     if (!userNotification) {
+      console.log('[Notifications] Failed to update notification');
       return NextResponse.json(
-        { success: false, error: 'Notification not found' },
-        { status: 404 }
+        { success: false, error: 'Failed to update notification' },
+        { status: 500 }
       );
     }
     
