@@ -5,7 +5,7 @@ import Organization from '@/models/Organization';
 import { withOrganizationCheck } from '@/middleware/organizationExists';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import { connectDB } from '@/lib/mongodb';
-
+import { deleteFromCloudinary } from '@/lib/cloudinary';
 interface EventQuery {
   organization: string;
   event_type?: string;
@@ -497,6 +497,47 @@ export async function PATCH(req: NextRequest) {
       console.error(error);
       return NextResponse.json(
         { error: 'Internal server error' },
+        { status: 500 }
+      );
+    }
+  });
+}
+export async function DELETE(req: NextRequest) {
+  return withOrganizationCheck(req, async (req, organization) => {
+    try {
+      await connectDB();
+      const body = await req.json();
+      const eventId = body.event_id;
+
+      if (!eventId) {
+        return NextResponse.json({ error: 'Missing event ID in request body' }, { status: 400 });
+      }
+
+      const event = await Event.findOne({ _id: eventId, organization: organization._id });
+
+      if (!event) {
+        return NextResponse.json({ error: 'Event not found or access denied' }, { status: 404 });
+      }
+
+      if (event.poster_public_id) {
+        await deleteFromCloudinary(event.poster_public_id);
+      }
+
+      if (event.banner_public_id) {
+        await deleteFromCloudinary(event.banner_public_id);
+      }
+
+      await Event.deleteOne({ _id: eventId });
+
+      await Organization.findByIdAndUpdate(organization._id, {
+        $pull: { events: event._id }
+      });
+
+      return NextResponse.json({ success: true, message: 'Event deleted successfully' }, { status: 200 });
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Failed to delete event' },
         { status: 500 }
       );
     }
