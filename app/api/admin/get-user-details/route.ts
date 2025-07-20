@@ -69,7 +69,15 @@ export async function POST(req: NextRequest) {
           avatar_url: user.avatar_url,
           phone: user.phone,
           role: user.role
-        } : null
+        } : {
+          userId: registration.user,
+          supabaseId: '',
+          email: '',
+          fullName: '',
+          avatar_url: '',
+          phone: '',
+          role: ''
+        }
       };
     });
     
