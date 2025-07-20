@@ -129,7 +129,15 @@ export async function POST(req: NextRequest) {
         // Upload file to Cloudinary
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
-        const uploadResult = await uploadToCloudinary(buffer);
+        let uploadOptions = {};
+        if (resourceType === 'document') {
+          uploadOptions = { resource_type: 'raw' };
+        } else if (resourceType === 'image') {
+          uploadOptions = { resource_type: 'image' };
+        } else if (resourceType === 'video') {
+          uploadOptions = { resource_type: 'video' };
+        }
+        const uploadResult = await uploadToCloudinary(buffer, uploadOptions);
         
         if (!uploadResult.success) {
           return NextResponse.json(
