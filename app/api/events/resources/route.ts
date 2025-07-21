@@ -57,6 +57,61 @@ export async function POST(req: NextRequest) {
   return withOrganizationCheck(req, async (req, organization) => {
     try {
       await connectDB();
+      let resourceData: ResourceData;
+      let isJson = false;
+      // Try to detect JSON body (for Supabase document uploads)
+      const contentType = req.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const body = await req.json();
+        isJson = true;
+        const { eventId, name, description, resource_type, createdBy, content, file_url, file_type, file_name } = body;
+        if (!eventId || !name || !resource_type || !createdBy) {
+          return NextResponse.json(
+            { success: false, error: 'Missing required fields' },
+            { status: 400 }
+          );
+        }
+        // Check if event exists and belongs to the organization
+        const event = await Event.findOne({
+          _id: eventId,
+          organization: organization._id
+        });
+        if (!event) {
+          return NextResponse.json(
+            { success: false, error: 'Event not found or does not belong to your organization' },
+            { status: 404 }
+          );
+        }
+        resourceData = {
+          event: eventId,
+          name,
+          description,
+          resource_type,
+          created_by: createdBy,
+        };
+        if (resource_type === 'text' || resource_type === 'link') {
+          if (!content) {
+            return NextResponse.json(
+              { success: false, error: 'Content is required for text or link resources' },
+              { status: 400 }
+            );
+          }
+          resourceData.content = content;
+        } else if (resource_type === 'document') {
+          if (!file_url) {
+            return NextResponse.json(
+              { success: false, error: 'file_url is required for document resources' },
+              { status: 400 }
+            );
+          }
+          resourceData.file_url = file_url;
+          resourceData.file_type = file_type;
+        }
+        // Create the resource
+        const resource = await Resource.create(resourceData);
+        return NextResponse.json({ success: true, data: resource }, { status: 201 });
+      }
+      // ... existing code for formData (Cloudinary) ...
       
       console.log('Processing resource upload request');
       const formData = await req.formData();
@@ -108,7 +163,7 @@ export async function POST(req: NextRequest) {
       }
       
       // Prepare resource data
-      const resourceData: ResourceData = {
+      resourceData = {
         event: eventId,
         name,
         description,
