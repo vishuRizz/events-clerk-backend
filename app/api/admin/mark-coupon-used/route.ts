@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
         },
         {
           $addToSet: {
-            'registered_events.$.couponsUsed': couponId
+            'registered_events.$.couponsUsed': { couponId, scannedAt: new Date() }
           }
         }
       );

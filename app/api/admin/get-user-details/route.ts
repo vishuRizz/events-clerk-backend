@@ -51,7 +51,42 @@ export async function POST(req: NextRequest) {
     // Map the registration details with user information
     const registeredUsers = event.registered_users.map((registration: Registration) => {
       const user = users.find(u => u._id.toString() === registration.user.toString());
-      
+      // Find the user's registration for this event to get couponsUsed
+      let couponsUsed: any[] = [];
+      if (user && user.registered_events) {
+        const userReg = user.registered_events.find(
+          (reg: any) => reg.event && reg.event.toString() === event._id.toString()
+        );
+        if (userReg && Array.isArray(userReg.couponsUsed)) {
+          couponsUsed = userReg.couponsUsed;
+        }
+      }
+      // For each food coupon, check if used and get scanned time
+      const foodCouponStatus = (event.foodCoupons || []).map((coupon: any) => {
+        let used = false;
+        let scannedAt: Date | null = null;
+        if (Array.isArray(couponsUsed)) {
+          const found = couponsUsed.find((c: any) => {
+            if (typeof c === 'object' && c !== null && 'couponId' in c) {
+              return c.couponId === coupon.id;
+            } else if (typeof c === 'number') {
+              // Backward compatibility: old format
+              return c === coupon.id;
+            }
+            return false;
+          });
+          if (found) {
+            used = true;
+            scannedAt = found.scannedAt ? new Date(found.scannedAt) : null;
+          }
+        }
+        return {
+          couponId: coupon.id,
+          couponName: coupon.name,
+          used,
+          scannedAt
+        };
+      });
       return {
         registrationDetails: {
           registrationId: registration._id,
@@ -77,7 +112,8 @@ export async function POST(req: NextRequest) {
           avatar_url: '',
           phone: '',
           role: ''
-        }
+        },
+        foodCouponStatus
       };
     });
     
