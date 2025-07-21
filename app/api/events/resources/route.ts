@@ -24,7 +24,6 @@ interface ResourceData {
 export async function GET(req: NextRequest) {
   try {
     await connectDB();
-    
     const { searchParams } = new URL(req.url);
     const eventId = searchParams.get('eventId');
     
@@ -38,7 +37,7 @@ export async function GET(req: NextRequest) {
     // Find all resources for the event
     const resources = await Resource.find({ event: eventId })
       .sort({ created_at: -1 });
-    
+      
     return NextResponse.json(
       { success: true, data: resources },
       { status: 200 }
@@ -58,30 +57,33 @@ export async function POST(req: NextRequest) {
     try {
       await connectDB();
       let resourceData: ResourceData;
-      let isJson = false;
+      
       // Try to detect JSON body (for Supabase document uploads)
       const contentType = req.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
         const body = await req.json();
-        isJson = true;
-        const { eventId, name, description, resource_type, createdBy, content, file_url, file_type, file_name } = body;
+        const { eventId, name, description, resource_type, createdBy, content, file_url, file_type } = body;
+        
         if (!eventId || !name || !resource_type || !createdBy) {
           return NextResponse.json(
             { success: false, error: 'Missing required fields' },
             { status: 400 }
           );
         }
+        
         // Check if event exists and belongs to the organization
         const event = await Event.findOne({
           _id: eventId,
           organization: organization._id
         });
+        
         if (!event) {
           return NextResponse.json(
             { success: false, error: 'Event not found or does not belong to your organization' },
             { status: 404 }
           );
         }
+        
         resourceData = {
           event: eventId,
           name,
@@ -89,6 +91,7 @@ export async function POST(req: NextRequest) {
           resource_type,
           created_by: createdBy,
         };
+        
         if (resource_type === 'text' || resource_type === 'link') {
           if (!content) {
             return NextResponse.json(
@@ -107,12 +110,13 @@ export async function POST(req: NextRequest) {
           resourceData.file_url = file_url;
           resourceData.file_type = file_type;
         }
+        
         // Create the resource
         const resource = await Resource.create(resourceData);
         return NextResponse.json({ success: true, data: resource }, { status: 201 });
       }
-      // ... existing code for formData (Cloudinary) ...
       
+      // ... existing code for formData (Cloudinary) ...
       console.log('Processing resource upload request');
       const formData = await req.formData();
       
@@ -129,6 +133,7 @@ export async function POST(req: NextRequest) {
       
       console.log('Resource type:', resourceType);
       console.log('File received:', file ? 'Yes' : 'No');
+      
       if (file) {
         console.log('File type:', file.type);
         console.log('File name:', file.name);
@@ -184,6 +189,7 @@ export async function POST(req: NextRequest) {
         // Upload file to Cloudinary
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
+        
         let uploadOptions = {};
         if (resourceType === 'document') {
           uploadOptions = { resource_type: 'raw' };
@@ -192,8 +198,8 @@ export async function POST(req: NextRequest) {
         } else if (resourceType === 'video') {
           uploadOptions = { resource_type: 'video' };
         }
-        const uploadResult = await uploadToCloudinary(buffer, uploadOptions);
         
+        const uploadResult = await uploadToCloudinary(buffer, uploadOptions);
         if (!uploadResult.success) {
           return NextResponse.json(
             { success: false, error: uploadResult.error },

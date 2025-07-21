@@ -14,6 +14,21 @@ interface Registration {
   couponsUsed?: string[];
 }
 
+interface FoodCoupon {
+  id: number;
+  name: string;
+}
+
+interface CouponUsed {
+  couponId: number;
+  scannedAt?: Date;
+}
+
+interface UserRegistration {
+  event: mongoose.Types.ObjectId;
+  couponsUsed?: (CouponUsed | number)[];
+}
+
 export async function POST(req: NextRequest) {
   try {
     // Connect to the database
@@ -52,21 +67,21 @@ export async function POST(req: NextRequest) {
     const registeredUsers = event.registered_users.map((registration: Registration) => {
       const user = users.find(u => u._id.toString() === registration.user.toString());
       // Find the user's registration for this event to get couponsUsed
-      let couponsUsed: any[] = [];
+      let couponsUsed: (CouponUsed | number)[] = [];
       if (user && user.registered_events) {
         const userReg = user.registered_events.find(
-          (reg: any) => reg.event && reg.event.toString() === event._id.toString()
+          (reg: UserRegistration) => reg.event && reg.event.toString() === event._id.toString()
         );
         if (userReg && Array.isArray(userReg.couponsUsed)) {
           couponsUsed = userReg.couponsUsed;
         }
       }
       // For each food coupon, check if used and get scanned time
-      const foodCouponStatus = (event.foodCoupons || []).map((coupon: any) => {
+      const foodCouponStatus = (event.foodCoupons || []).map((coupon: FoodCoupon) => {
         let used = false;
         let scannedAt: Date | null = null;
         if (Array.isArray(couponsUsed)) {
-          const found = couponsUsed.find((c: any) => {
+          const found = couponsUsed.find((c: CouponUsed | number) => {
             if (typeof c === 'object' && c !== null && 'couponId' in c) {
               return c.couponId === coupon.id;
             } else if (typeof c === 'number') {
@@ -77,7 +92,7 @@ export async function POST(req: NextRequest) {
           });
           if (found) {
             used = true;
-            scannedAt = found.scannedAt ? new Date(found.scannedAt) : null;
+            scannedAt = typeof found === 'object' && found.scannedAt ? new Date(found.scannedAt) : null;
           }
         }
         return {
