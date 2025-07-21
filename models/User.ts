@@ -35,7 +35,10 @@ const UserSchema = new mongoose.Schema({
     status: { type: String, enum: ['pending', 'confirmed', 'cancelled'], default: 'confirmed' },
     attended: { type: Boolean, default: false },
     attendance_time: { type: Date },
-    couponsUsed: [{ type: Number }] 
+    couponsUsed: [{
+      couponId: { type: Number, required: true },
+      scannedAt: { type: Date, required: true }
+    }]
   }],
   registered_sessions: [{
     session: { type: mongoose.Schema.Types.ObjectId, ref: 'Session' },
@@ -70,7 +73,7 @@ export interface IUser extends mongoose.Document {
     status: 'pending' | 'confirmed' | 'cancelled';
     attended: boolean;
     attendance_time?: Date;
-    couponsUsed: number[];  // Add this line for coupons used
+    couponsUsed: { couponId: number; scannedAt: Date }[];
   }[];
   registered_sessions: {
     session: mongoose.Types.ObjectId;
