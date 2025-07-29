@@ -300,24 +300,50 @@ export async function PUT(req: NextRequest) {
 
         const updateData: EventUpdateData = { updated_at: new Date() };
 
-        // Handle other form fields (you can add more fields here as needed)
+        // Handle all form fields
         const name = formData.get('name') as string;
         const description = formData.get('description') as string;
         const event_type = formData.get('event_type') as string;
+        const start_time = formData.get('start_time') as string;
+        const end_time = formData.get('end_time') as string;
+        const registration_deadline = formData.get('registration_deadline') as string;
         const max_capacity = formData.get('max_capacity') as string;
         const price = formData.get('price') as string;
         const is_free = formData.get('is_free');
         const is_online = formData.get('is_online');
         const online_url = formData.get('online_url') as string;
 
+        // Venue fields
+        const venue_name = formData.get('venue_name') as string;
+        const venue_address = formData.get('venue_address') as string;
+        const venue_city = formData.get('venue_city') as string;
+        const venue_state = formData.get('venue_state') as string;
+        const venue_zip = formData.get('venue_zip') as string;
+        const venue_country = formData.get('venue_country') as string;
+
         if (name) updateData.name = name;
         if (description) updateData.description = description;
         if (event_type) updateData.event_type = event_type;
+        if (start_time) updateData.start_time = new Date(start_time);
+        if (end_time) updateData.end_time = new Date(end_time);
+        if (registration_deadline) updateData.registration_deadline = new Date(registration_deadline);
         if (max_capacity) updateData.max_capacity = parseInt(max_capacity);
         if (price) updateData.price = parseFloat(price);
         if (is_free !== null) updateData.is_free = is_free === 'true';
         if (is_online !== null) updateData.is_online = is_online === 'true';
         if (online_url) updateData.online_url = online_url;
+
+        // Handle venue data
+        if (venue_name || venue_address || venue_city || venue_state || venue_zip || venue_country) {
+          updateData.venue = {
+            name: venue_name || existingEvent.venue?.name || '',
+            address: venue_address || existingEvent.venue?.address,
+            city: venue_city || existingEvent.venue?.city,
+            state: venue_state || existingEvent.venue?.state,
+            postal_code: venue_zip || existingEvent.venue?.postal_code,
+            country: venue_country || existingEvent.venue?.country || 'Unknown'
+          };
+        }
 
         // Handle poster upload
         if (posterFile && posterFile.size > 0) {
