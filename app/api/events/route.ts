@@ -4,7 +4,7 @@ import { connectDB } from '@/lib/mongodb';
 import Event from '@/models/Event';
 
 export async function GET(req: NextRequest) {
-  return withUserAuth(req, async (req: NextRequest, user) => {
+  return withUserAuth(req, async (req: NextRequest) => {
     try {
       await connectDB();
 
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
       const skip = (page - 1) * limit;
 
       // Build query
-      const query: any = {};
+      const query: Record<string, unknown> = {};
       if (eventType) query.event_type = eventType;
       if (isOnline !== null) query.is_online = isOnline === 'true';
 

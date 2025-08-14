@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
       console.log('User found/created, proceeding to create event');
 
       // Create the event
-      const eventData: any = {
+      const eventData: Record<string, unknown> = {
         name,
         description,
         event_type: eventType,
@@ -390,7 +390,7 @@ export async function GET(req: NextRequest) {
       const is_online = searchParams.get('is_online');
 
       // Always filter by the organization from middleware
-      const query: any = { organization: organization._id };
+      const query: Record<string, unknown> = { organization: organization._id };
       
       // Add additional filters if provided
       if (event_type) query.event_type = event_type;

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Organization from '@/models/Organization';
-import { uploadToCloudinary } from '@/lib/cloudinary';
 
 export async function POST(req: Request) {
   try {

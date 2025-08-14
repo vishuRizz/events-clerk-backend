@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
 
 // Get all sessions for an event
 export async function GET(req: NextRequest) {
-  return withUserAuth(req, async (req: NextRequest, user) => {
+  return withUserAuth(req, async (req: NextRequest) => {
     try {
       await connectDB();
 
