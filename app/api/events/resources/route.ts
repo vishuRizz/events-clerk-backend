@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {connectDB} from '@/lib/mongodb';
+import { withUserAuth } from '@/middleware/userAuth';
+import { connectDB } from '@/lib/mongodb';
 import Resource from '@/models/Resource';
 import Event from '@/models/Event';
 import Notification from '@/models/Notification';
@@ -22,33 +23,39 @@ interface ResourceData {
 
 // GET resources for an event
 export async function GET(req: NextRequest) {
-  try {
-    await connectDB();
-    const { searchParams } = new URL(req.url);
-    const eventId = searchParams.get('eventId');
-    
-    if (!eventId) {
+  return withUserAuth(req, async (req: NextRequest, user) => {
+    try {
+      await connectDB();
+
+      // Get event ID from query parameters
+      const { searchParams } = new URL(req.url);
+      const eventId = searchParams.get('eventId');
+
+      if (!eventId) {
+        return NextResponse.json(
+          { success: false, error: 'Event ID is required' },
+          { status: 400 }
+        );
+      }
+
+      // Find resources for the event
+      const resources = await Resource.find({ event: eventId })
+        .populate('created_by', 'fullName')
+        .sort({ created_at: -1 });
+
+      return NextResponse.json({
+        success: true,
+        data: resources
+      }, { status: 200 });
+
+    } catch (error) {
+      console.error('Error fetching resources:', error);
       return NextResponse.json(
-        { success: false, error: 'Event ID is required' },
-        { status: 400 }
+        { success: false, error: 'Failed to fetch resources' },
+        { status: 500 }
       );
     }
-    
-    // Find all resources for the event
-    const resources = await Resource.find({ event: eventId })
-      .sort({ created_at: -1 });
-      
-    return NextResponse.json(
-      { success: true, data: resources },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error('Error fetching resources:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch resources' },
-      { status: 500 }
-    );
-  }
+  });
 }
 
 // POST create a new resource

@@ -8,51 +8,43 @@ const OrganizationSchema = new mongoose.Schema({
   description: {
     type: String,
   },
-  logo_url: { 
-    type: String 
-  },
-  logo_public_id: { 
-    type: String 
-  },
-  banner_url: { 
-    type: String 
-  },
-  banner_public_id: { 
-    type: String 
-  },
-  domain: { 
-    type: String 
-  },
-  type: { 
-    type: String 
-  },
-  contact_email: { 
-    type: String 
-  },
-  contact_phone: { 
-    type: String 
-  },
-  website: { 
-    type: String 
-  },
-  ownerSupabaseId: {
+  ownerClerkId: {
     type: String,
     required: true,
-    ref: 'User',
   },
   members: [{
+    type: String, // Clerk user IDs
+  }],
+  logo_url: {
     type: String,
-    ref: 'User',
-  }],
-  events: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Event',
-  }],
-  createdAt: {
+  },
+  website: {
+    type: String,
+  },
+  contact_email: {
+    type: String,
+  },
+  contact_phone: {
+    type: String,
+  },
+  address: {
+    street: String,
+    city: String,
+    state: String,
+    country: String,
+    zip_code: String,
+  },
+  social_media: {
+    facebook: String,
+    twitter: String,
+    linkedin: String,
+    instagram: String,
+  },
+  created_at: {
     type: Date,
     default: Date.now,
   },
-  updatedAt: {
+  updated_at: {
     type: Date,
     default: Date.now,
   },

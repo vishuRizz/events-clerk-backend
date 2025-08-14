@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 const UserSchema = new mongoose.Schema({
-  supabaseId: {
+  clerkId: {
     type: String,
     required: true,
     unique: true,
@@ -59,8 +59,8 @@ const UserSchema = new mongoose.Schema({
 export default mongoose.models.User || mongoose.model('User', UserSchema);
 
 export interface IUser extends mongoose.Document {
-  _id: mongoose.Types.ObjectId;
-  supabaseId: string;
+  _id: mongoose.Types.ObjectId
+  clerkId: string;
   email: string;
   fullName: string;
   avatar_url?: string;

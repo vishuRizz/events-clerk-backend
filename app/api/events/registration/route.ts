@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withUserAuth } from '@/middleware/userAuth';
+import { connectDB } from '@/lib/mongodb';
 import Event from '@/models/Event';
 import { IUser } from '@/models/User';
-import mongoose from 'mongoose';
 
 interface RegisteredUser {
-  user: mongoose.Types.ObjectId;
+  user: string;
   registration_date: Date;
   status: 'pending' | 'confirmed' | 'cancelled';
 }

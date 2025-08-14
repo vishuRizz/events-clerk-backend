@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withUserAuth } from '@/middleware/userAuth';
+import { connectDB } from '@/lib/mongodb';
 import Event from '@/models/Event';
 import Session from '@/models/Session';
 import { IUser } from '@/models/User';
-import mongoose from 'mongoose';
-import { connectDB } from '@/lib/mongodb';
 
 export async function POST(req: NextRequest) {
   return withUserAuth(req, async (req: NextRequest, user: IUser) => {
     try {
-      // Connect to the database
-      await connectDB();
-      
       // Parse the request body
       const body = await req.json();
       const { eventId, sessionId } = body;
@@ -22,6 +18,8 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
+
+      await connectDB();
 
       // Find the event and check if it exists
       const event = await Event.findById(eventId);
@@ -41,29 +39,17 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Verify that the session belongs to the event
+      // Check if the session belongs to the event
       if (session.event.toString() !== eventId) {
         return NextResponse.json(
-          { success: false, error: 'Session does not belong to the specified event' },
+          { success: false, error: 'Session does not belong to this event' },
           { status: 400 }
         );
       }
 
-      // Check if user is already registered for the event
-    //   const isRegisteredForEvent = event.registered_users.some(
-    //     (registration: EventRegistration) => registration.user.toString() === user._id.toString()
-    //   );
-    //   console.log(isRegisteredForEvent);
-    //   if (!isRegisteredForEvent) {
-    //     return NextResponse.json(
-    //       { success: false, error: 'You must register for the event before registering for sessions' },
-    //       { status: 400 }
-    //     );
-    //   }
-
       // Check if user is already registered for this session
       const existingSessionRegistration = session.registrations.find(
-        (registration: { user: mongoose.Types.ObjectId }) => registration.user.toString() === user._id.toString()
+        (registration: { user: string }) => registration.user.toString() === user._id.toString()
       );
 
       if (existingSessionRegistration) {
@@ -128,32 +114,37 @@ export async function POST(req: NextRequest) {
 
 // Get all sessions for an event
 export async function GET(req: NextRequest) {
-  try {
-    await connectDB();
-    
-    const { searchParams } = new URL(req.url);
-    const eventId = searchParams.get('eventId');
-    
-    if (!eventId) {
+  return withUserAuth(req, async (req: NextRequest, user) => {
+    try {
+      await connectDB();
+
+      // Get event ID from query parameters
+      const { searchParams } = new URL(req.url);
+      const eventId = searchParams.get('eventId');
+
+      if (!eventId) {
+        return NextResponse.json(
+          { success: false, error: 'Event ID is required' },
+          { status: 400 }
+        );
+      }
+
+      // Find sessions for the event
+      const sessions = await Session.find({ event: eventId })
+        .populate('created_by', 'fullName')
+        .sort({ start_time: 1 });
+
+      return NextResponse.json({
+        success: true,
+        data: sessions
+      }, { status: 200 });
+
+    } catch (error) {
+      console.error('Error fetching sessions:', error);
       return NextResponse.json(
-        { success: false, error: 'Event ID is required' },
-        { status: 400 }
+        { success: false, error: 'Failed to fetch sessions' },
+        { status: 500 }
       );
     }
-    
-    // Find all sessions for the event
-    const sessions = await Session.find({ event: eventId })
-      .sort({ start_time: 1 });
-    
-    return NextResponse.json(
-      { success: true, data: sessions },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error('Error fetching sessions:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch sessions' },
-      { status: 500 }
-    );
-  }
+  });
 } 

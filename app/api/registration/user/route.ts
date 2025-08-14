@@ -1,20 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { withUserAuth } from '@/middleware/userAuth';
 import { connectDB } from '@/lib/mongodb';
 import User from '@/models/User';
-import Event from '@/models/Event'; 
-import { withUserAuth } from '@/middleware/userAuth';
-import mongoose from 'mongoose';
+import Event from '@/models/Event';
 
-// Define the interface for the populated event inside the registration
-interface PopulatedEvent {
-  _id: mongoose.Types.ObjectId;
-  name: string;
-  start_time: Date;
-}
-
-// Define the interface for the populated registration in user
 interface PopulatedRegistration {
-  event: PopulatedEvent;
+  event: { _id: string; name: string; start_time: Date };
   registration_date: Date;
   status: 'pending' | 'confirmed' | 'cancelled';
 }
@@ -59,7 +50,7 @@ export async function GET(req: NextRequest) {
         success: true,
         user: {
           id: populatedUser._id,
-          supabaseId: populatedUser.supabaseId,
+          clerkId: populatedUser.clerkId,
           email: populatedUser.email,
           fullName: populatedUser.fullName,
           avatar_url: populatedUser.avatar_url,
@@ -84,7 +75,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: Request) {
   try {
     const { 
-      supabaseId, 
+      clerkId, 
       email, 
       fullName,
       avatar_url,
@@ -93,7 +84,7 @@ export async function POST(req: Request) {
       last_sign_in_at
     } = await req.json();
 
-    if (!supabaseId || !email || !fullName) {
+    if (!clerkId || !email || !fullName) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -103,7 +94,7 @@ export async function POST(req: Request) {
     await connectDB();
 
     const user = await User.create({
-      supabaseId,
+      clerkId,
       email,
       fullName,
       avatar_url,
@@ -115,14 +106,14 @@ export async function POST(req: Request) {
     return NextResponse.json(user, { status: 201 });
   } catch (error) {
     if (error instanceof Error) {
-      if (error) {
+      if (error.message.includes('duplicate key')) {
         return NextResponse.json(
           { error: 'User already exists' },
           { status: 409 }
         );
       }
       return NextResponse.json(
-        { error: error },
+        { error: error.message },
         { status: 500 }
       );
     }
@@ -136,7 +127,7 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const { 
-      supabaseId,
+      clerkId,
       email, 
       fullName,
       avatar_url,
@@ -145,9 +136,9 @@ export async function PUT(req: Request) {
       last_sign_in_at
     } = await req.json();
 
-    if (!supabaseId) {
+    if (!clerkId) {
       return NextResponse.json(
-        { error: 'Supabase ID is required' },
+        { error: 'Clerk ID is required' },
         { status: 400 }
       );
     }
@@ -164,7 +155,7 @@ export async function PUT(req: Request) {
     updateData.updatedAt = new Date();
 
     const user = await User.findOneAndUpdate(
-      { supabaseId },
+      { clerkId },
       { $set: updateData },
       { new: true }
     );

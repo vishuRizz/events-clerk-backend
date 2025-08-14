@@ -9,11 +9,11 @@ export async function POST(req: NextRequest) {
     try {
       // Parse the request body
       const body = await req.json();
-      const { eventId, supabaseId } = body;
+      const { eventId, userId } = body;
 
-      if (!eventId || !supabaseId) {
+      if (!eventId || !userId) {
         return NextResponse.json(
-          { success: false, error: 'Event ID and Supabase ID are required' },
+          { success: false, error: 'Event ID and User ID are required' },
           { status: 400 }
         );
       }
@@ -33,8 +33,8 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Find the user by supabaseId instead of _id
-      const user = await User.findOne({ supabaseId });
+      // Find the user
+      const user = await User.findById(userId);
       if (!user) {
         return NextResponse.json(
           { success: false, error: 'User not found' },
@@ -42,78 +42,52 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Find the user registration in the event using user._id
-      const registrationIndex = event.registered_users.findIndex(
-        (reg: { user: { toString: () => string }, status: string }) => 
-          reg.user.toString() === user._id.toString() && reg.status === 'confirmed'
+      // Check if the user is registered for this event
+      const eventRegistration = user.registered_events.find(
+        (registration: any) => registration.event.toString() === eventId
       );
 
-      if (registrationIndex === -1) {
+      if (!eventRegistration) {
         return NextResponse.json(
-          { success: false, error: 'User is not registered for this event or registration is not confirmed' },
+          { success: false, error: 'User is not registered for this event' },
           { status: 400 }
         );
       }
 
-      // Check if user is already checked in
-      if (event.registered_users[registrationIndex].attended) {
+      // Check if user has already attended
+      if (eventRegistration.attended) {
         return NextResponse.json(
-          { 
-            success: true, 
-            message: 'User is already checked in',
-            data: {
-              eventId: event._id,
-              userId: user._id,
-              supabaseId: user.supabaseId,
-              checkInTime: event.registered_users[registrationIndex].check_in_time,
-              alreadyCheckedIn: true
-            }
-          },
-          { status: 208 } // 208 Already Reported
+          { success: false, error: 'User has already been marked as attended' },
+          { status: 400 }
         );
       }
 
-      // Update the event to mark the user as attended
-      event.registered_users[registrationIndex].attended = true;
-      event.registered_users[registrationIndex].check_in_time = new Date();
-      
-      await event.save();
+      // Mark user as attended
+      eventRegistration.attended = true;
+      eventRegistration.attendance_time = new Date();
 
-      // Also update the user's registration record
-      await User.updateOne(
-        { 
-          _id: user._id,
-          'registered_events.event': eventId
-        },
-        {
-          $set: {
-            'registered_events.$.attended': true,
-            'registered_events.$.attendance_time': new Date()
-          }
-        }
-      );
+      // Save the user
+      await user.save();
 
       return NextResponse.json(
         { 
-          success: true, 
-          message: 'User successfully checked in',
+          success: true,
+          message: 'Attendance marked successfully',
           data: {
             eventId: event._id,
             eventName: event.name,
             userId: user._id,
-            supabaseId: user.supabaseId,
             userName: user.fullName,
-            checkInTime: new Date(),
-            alreadyCheckedIn: false
+            attendanceTime: new Date()
           }
         },
         { status: 200 }
       );
 
     } catch (error) {
-      console.error('Error checking in user:', error);
+      console.error('Error marking attendance:', error);
       return NextResponse.json(
-        { success: false, error: 'Failed to check in user', details: error instanceof Error ? error.message : 'Unknown error' },
+        { success: false, error: 'Failed to mark attendance' },
         { status: 500 }
       );
     }

@@ -1,7 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { withOrganizationCheck } from '@/middleware/organizationExists';
+import { auth } from '@clerk/nextjs/server';
 import Event from '@/models/Event';
 import Session from '@/models/Session';
 import User from '@/models/User';
@@ -81,9 +81,9 @@ export async function POST(req: NextRequest) {
         );
       }
       
-      // Get the user ID from Supabase token
-      const accessToken = req.headers.get('x-supabase-auth');
-      if (!accessToken) {
+      // Get the user ID from Clerk token
+      const { userId } = await auth();
+      if (!userId) {
         console.log('No authentication token provided');
         return NextResponse.json(
           { success: false, error: 'Authentication required' },
@@ -91,41 +91,24 @@ export async function POST(req: NextRequest) {
         );
       }
       
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!, 
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      );
-      
-      const { data, error } = await supabase.auth.getUser(accessToken);
-      
-      if (error || !data.user) {
-        console.log('Invalid authentication token:', error);
-        return NextResponse.json(
-          { success: false, error: 'Invalid authentication token' },
-          { status: 401 }
-        );
-      }
-      
-      const supabaseUserId = data.user.id;
-      
       // Find or create the user
-      let user = await User.findOne({ supabaseId: supabaseUserId });
+      let user = await User.findOne({ clerkId: userId });
       if (!user) {
         // First try to find a user with the same email
-        user = await User.findOne({ email: data.user.email });
+        user = await User.findOne({ email: userId });
         
         if (user) {
-          // If a user with this email exists but has a different supabaseId,
-          // update the supabaseId to match the current one
-          user.supabaseId = supabaseUserId;
+          // If a user with this email exists but has a different clerkId,
+          // update the clerkId to match the current one
+          user.clerkId = userId;
           await user.save();
-          console.log('Updated existing user with new Supabase ID');
+          console.log('Updated existing user with new Clerk ID');
         } else {
           // Create a new user only if no user with this email exists
           user = await User.create({
-            supabaseId: supabaseUserId,
-            email: data.user.email || 'unknown@example.com',
-            fullName: data.user.user_metadata?.full_name || 'User',
+            clerkId: userId,
+            email: userId,
+            fullName: 'User',
             role: 'user'
           });
           console.log('Created new user');
@@ -161,9 +144,13 @@ export async function POST(req: NextRequest) {
       console.log('Session creation completed successfully');
       return NextResponse.json(
         { 
-          success: true, 
+          success: true,
           message: 'Session created successfully',
-          data: newSession
+          data: {
+            sessionId: newSession._id,
+            name: newSession.name,
+            eventId: eventId
+          }
         },
         { status: 201 }
       );
@@ -171,10 +158,7 @@ export async function POST(req: NextRequest) {
     } catch (error) {
       console.error('Error creating session:', error);
       return NextResponse.json(
-        { 
-          success: false, 
-          error: error instanceof Error ? error.message : 'Failed to create session' 
-        },
+        { success: false, error: 'Failed to create session' },
         { status: 500 }
       );
     }

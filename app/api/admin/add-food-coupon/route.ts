@@ -59,11 +59,16 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json(
         { 
-          success: true, 
+          success: true,
           message: 'Food coupon added successfully',
           data: {
             eventId: event._id,
-            foodCoupons: event.foodCoupons
+            foodCoupon: {
+              id: nextId,
+              name: foodCoupon.name,
+              couponDescription: foodCoupon.couponDescription || '',
+              quantity: foodCoupon.quantity || 0
+            }
           }
         },
         { status: 200 }
@@ -72,7 +77,7 @@ export async function POST(req: NextRequest) {
     } catch (error) {
       console.error('Error adding food coupon:', error);
       return NextResponse.json(
-        { success: false, error: 'Failed to add food coupon', details: error instanceof Error ? error.message : 'Unknown error' },
+        { success: false, error: 'Failed to add food coupon' },
         { status: 500 }
       );
     }

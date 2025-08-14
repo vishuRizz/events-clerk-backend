@@ -1,66 +1,43 @@
 // app/api/events/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import Event from '@/models/Event';
-import Organization from '@/models/Organization';
 import { withOrganizationCheck } from '@/middleware/organizationExists';
-import { uploadToCloudinary } from '@/lib/cloudinary';
+import { auth } from '@clerk/nextjs/server';
 import { connectDB } from '@/lib/mongodb';
+import Event from '@/models/Event';
+import User from '@/models/User';
+import Organization from '@/models/Organization';
+import { uploadToCloudinary } from '@/lib/cloudinary';
 import { deleteFromCloudinary } from '@/lib/cloudinary';
-interface EventQuery {
-  organization: string;
-  event_type?: string;
-  is_online?: boolean;
-}
 
 interface VenueData {
   name: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  postal_code?: string;
+  address: string;
+  city: string;
+  state: string;
   country: string;
-}
-
-interface EventData {
-  organization: string;
-  name: string;
-  description?: string;
-  start_time: Date;
-  end_time: Date;
-  is_online: boolean;
-  online_url?: string;
-  event_type?: string;
-  max_capacity?: number;
-  price?: number;
-  is_free: boolean;
-  registration_deadline?: Date;
-  created_by: string;
-  updated_by: string;
-  venue?: VenueData;
-  poster_url?: string;
-  poster_public_id?: string;
-  banner_url?: string;
-  banner_public_id?: string;
+  postal_code: string;
+  capacity?: number;
 }
 
 interface EventUpdateData {
-  updated_at: Date;
-  poster_url?: string;
-  poster_public_id?: string;
-  banner_url?: string;
-  banner_public_id?: string;
   name?: string;
   description?: string;
+  event_type?: string;
   start_time?: Date;
   end_time?: Date;
   is_online?: boolean;
   online_url?: string;
-  event_type?: string;
-  max_capacity?: number;
-  price?: number;
   is_free?: boolean;
+  price?: number;
+  max_capacity?: number;
   registration_deadline?: Date;
   venue?: VenueData;
+  poster_url?: string;
+  poster_public_id?: string;
+  banner_url?: string;
+  banner_public_id?: string;
+  updated_at?: Date;
+  organization?: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -107,159 +84,103 @@ export async function POST(req: NextRequest) {
       }
 
       if (endDateTime <= startDateTime) {
-        console.error('End date must be after start date:', { startDateTime, endDateTime });
+        console.error('End time must be after start time');
         return NextResponse.json(
-          { error: 'End date must be after start date' },
+          { error: 'End time must be after start time' },
           { status: 400 }
         );
       }
 
-      // Prepare event data
-      const eventData: EventData = {
+      // Get the user ID from Clerk token
+      const { userId } = await auth();
+      if (!userId) {
+        console.log('No authentication token provided');
+        return NextResponse.json(
+          { error: 'Authentication required' },
+          { status: 401 }
+        );
+      }
+      
+      // Find or create the user
+      let user = await User.findOne({ clerkId: userId });
+      if (!user) {
+        // Create a new user if not found
+        user = await User.create({
+          clerkId: userId,
+          email: userId,
+          fullName: 'User',
+          role: 'user'
+        });
+        console.log('Created new user for event creation');
+      }
+      
+      console.log('User found/created, proceeding to create event');
+
+      // Create the event
+      const eventData: any = {
         name,
         description,
         event_type: eventType,
         start_time: startDateTime,
         end_time: endDateTime,
         is_online: isOnline,
+        online_url: isOnline ? formData.get('online_url') as string : undefined,
         is_free: isFree,
+        price: isFree ? 0 : parseFloat(formData.get('ticket_price') as string) || 0,
+        max_capacity: parseInt(formData.get('max_capacity') as string) || null,
+        registration_deadline: formData.get('registration_deadline') ? new Date(formData.get('registration_deadline') as string) : undefined,
         organization: organization._id,
-        created_by: organization._id,
-        updated_by: organization._id // required by EventData interface
+        created_by: user._id,
+        updated_by: user._id,
+        registered_users: [],
+        sessions: [],
+        foodCoupons: []
       };
 
-      // Add optional fields if they exist
-      const maxCapacity = formData.get('max_capacity');
-      if (maxCapacity) {
-        eventData.max_capacity = parseInt(maxCapacity as string);
-      }
-
-      const price = formData.get('price');
-      if (price && !isFree) {
-        eventData.price = parseFloat(price as string);
-      }
-
-      const onlineUrl = formData.get('online_url');
-      if (isOnline && typeof onlineUrl === 'string' && onlineUrl) {
-        eventData.online_url = onlineUrl;
-      }
-
-      const registrationDeadline = formData.get('registration_deadline');
-      if (typeof registrationDeadline === 'string' && registrationDeadline) {
-        const deadlineDateTime = new Date(registrationDeadline as string);
-        if (!isNaN(deadlineDateTime.getTime()) && deadlineDateTime < startDateTime) {
-          eventData.registration_deadline = deadlineDateTime;
-        }
-      }
-
-      // Handle venue data for in-person events
+      // Add venue data if not online
       if (!isOnline) {
-        const venueName = formData.get('venue_name');
-        const venueAddress = formData.get('venue_address');
-        const venueCity = formData.get('venue_city');
-        const venueState = formData.get('venue_state');
-        const venueZip = formData.get('venue_zip');
-        const venueCountry = formData.get('venue_country');
+        const venueName = formData.get('venue_name') as string;
+        const venueAddress = formData.get('venue_address') as string;
+        const venueCity = formData.get('venue_city') as string;
+        const venueState = formData.get('venue_state') as string;
+        const venueCountry = formData.get('venue_country') as string;
+        const venueZipCode = formData.get('venue_zip_code') as string;
+        const venueCapacity = formData.get('venue_capacity') as string;
 
-        if (venueName) {
+        if (venueName && venueAddress) {
           eventData.venue = {
-            name: venueName as string,
-            address: venueAddress ? (venueAddress as string) : undefined,
-            city: venueCity ? (venueCity as string) : undefined,
-            state: venueState ? (venueState as string) : undefined,
-            postal_code: venueZip ? (venueZip as string) : undefined,
-            country: venueCountry ? (venueCountry as string) : 'Unknown'
+            name: venueName,
+            address: venueAddress,
+            city: venueCity || '',
+            state: venueState || '',
+            country: venueCountry || '',
+            postal_code: venueZipCode || '',
+            capacity: venueCapacity ? parseInt(venueCapacity) : undefined
           };
         }
       }
 
-      // Handle poster upload
-      const posterFile = formData.get('posterFile') as File;
-      if (posterFile && posterFile.size > 0) {
-        try {
-          console.log('Processing poster upload...');
-          const arrayBuffer = await posterFile.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
-          
-          console.log('Uploading poster to Cloudinary...');
-          const uploadResult = await uploadToCloudinary(buffer, {
-            resource_type: 'image',
-            folder: `events/posters`,
-            transformation: [
-              { width: 600, height: 800, crop: 'fill' },
-              { quality: 'auto' },
-              { fetch_format: 'auto' }
-            ]
-          });
-
-          if (!uploadResult.success) {
-            throw new Error(uploadResult.error || 'Failed to upload poster');
-          }
-
-          eventData.poster_url = uploadResult.secure_url;
-          eventData.poster_public_id = uploadResult.public_id;
-          console.log('Poster uploaded successfully:', uploadResult.secure_url);
-        } catch (uploadError) {
-          console.error('Poster upload error:', uploadError);
-          return NextResponse.json(
-            { error: `Poster upload failed: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}` },
-            { status: 500 }
-          );
-        }
-      }
-
-      // Handle banner upload
-      const bannerFile = formData.get('bannerFile') as File;
-      if (bannerFile && bannerFile.size > 0) {
-        try {
-          console.log('Processing banner upload...');
-          const arrayBuffer = await bannerFile.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
-          
-          console.log('Uploading banner to Cloudinary...');
-          const uploadResult = await uploadToCloudinary(buffer, {
-            resource_type: 'image',
-            folder: `events/banners`,
-            transformation: [
-              { width: 1200, height: 400, crop: 'fill' },
-              { quality: 'auto' },
-              { fetch_format: 'auto' }
-            ]
-          });
-
-          if (!uploadResult.success) {
-            throw new Error(uploadResult.error || 'Failed to upload banner');
-          }
-
-          eventData.banner_url = uploadResult.secure_url;
-          eventData.banner_public_id = uploadResult.public_id;
-          console.log('Banner uploaded successfully:', uploadResult.secure_url);
-        } catch (uploadError) {
-          console.error('Banner upload error:', uploadError);
-          return NextResponse.json(
-            { error: `Banner upload failed: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}` },
-            { status: 500 }
-          );
-        }
-      }
-
-      console.log('Creating event in database...');
-      // Create the event
+      console.log('Creating event with data:', eventData);
       const event = await Event.create(eventData);
+      console.log('Event created successfully with ID:', event._id);
 
-      // Update the organization document to include the new event ID
-      await Organization.findByIdAndUpdate(
-        organization._id,
-        { $push: { events: event._id } },
-        { new: true }
+      return NextResponse.json(
+        { 
+          success: true,
+          message: 'Event created successfully',
+          data: {
+            eventId: event._id,
+            name: event.name,
+            organizationId: organization._id
+          }
+        },
+        { status: 201 }
       );
 
-      console.log('Event created successfully:', event._id);
-      return NextResponse.json({ success: true, data: event }, { status: 201 });
     } catch (error) {
       console.error('Error creating event:', error);
       return NextResponse.json(
-        { error: error instanceof Error ? error.message : 'Failed to create event' },
+        { error: 'Failed to create event' },
         { status: 500 }
       );
     }
@@ -469,7 +390,7 @@ export async function GET(req: NextRequest) {
       const is_online = searchParams.get('is_online');
 
       // Always filter by the organization from middleware
-      const query: EventQuery = { organization: organization._id.toString() };
+      const query: any = { organization: organization._id };
       
       // Add additional filters if provided
       if (event_type) query.event_type = event_type;

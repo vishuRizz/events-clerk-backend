@@ -16,7 +16,7 @@ export async function POST(req: Request) {
 
     await connectDB();
 
-    // Find the user by email instead of Supabase ID
+    // Find the user by email instead of Clerk ID
     const user = await User.findOne({ email: email });
     
     if (!user) {
@@ -27,12 +27,12 @@ export async function POST(req: Request) {
     }
 
     // Update the Organization.members array if not already present
-    // Still store the Supabase ID in the members array for consistency
+    // Store the Clerk ID in the members array for consistency
     const updatedOrganization = await Organization.findByIdAndUpdate(
       organizationId,
       { 
         $addToSet: { 
-          members: user.supabaseId  // Store the Supabase ID from the found user
+          members: user.clerkId  // Store the Clerk ID from the found user
         } 
       },
       { new: true }
@@ -48,7 +48,6 @@ export async function POST(req: Request) {
     console.log('updating role of user');
     // Update the user's role to 'admin'
     await User.findByIdAndUpdate(
-      
       user._id,
       { role: 'admin' }
     );
