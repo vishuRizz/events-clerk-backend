@@ -44,6 +44,15 @@ export async function GET(req: NextRequest) {
 
     } catch (error) {
       console.error('Error fetching events:', error);
+      
+      // Check if it's a database connection error
+      if (error instanceof Error && error.message.includes('MONGODB_URI')) {
+        return NextResponse.json(
+          { success: false, error: 'Database not configured. Please set up MongoDB Atlas and configure MONGODB_URI.' },
+          { status: 503 }
+        );
+      }
+      
       return NextResponse.json(
         { success: false, error: 'Failed to fetch events' },
         { status: 500 }

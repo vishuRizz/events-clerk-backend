@@ -7,6 +7,10 @@ if (!MONGODB_URI) {
 }
 
 export async function connectDB() {
+  if (!MONGODB_URI) {
+    throw new Error('MONGODB_URI environment variable is not configured');
+  }
+
   if (mongoose.connection.readyState >= 1) {
     // Already connected
     return mongoose.connection;
