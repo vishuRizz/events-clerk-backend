@@ -3,6 +3,7 @@ import { withUserAuth } from '@/middleware/userAuth';
 import { connectDB } from '@/lib/mongodb';
 import User from '@/models/User';
 import Event from '@/models/Event';
+import { auth } from '@clerk/nextjs/server';
 
 interface PopulatedRegistration {
   event: { _id: string; name: string; start_time: Date };
@@ -74,37 +75,75 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: Request) {
   try {
+    // Get the Clerk user ID from the request
+    let userId: string | null = null;
+    
+    try {
+      const authResult = await auth();
+      userId = authResult.userId;
+    } catch (clerkError) {
+      console.error('Clerk auth error:', clerkError);
+      return NextResponse.json(
+        { error: 'Authentication required to create user' },
+        { status: 401 }
+      );
+    }
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'User ID not found' },
+        { status: 401 }
+      );
+    }
+
     const { 
-      clerkId, 
       email, 
       fullName,
-      avatar_url,
-      phone,
-      role,
-      last_sign_in_at
+      role = 'user'
     } = await req.json();
 
-    if (!clerkId || !email || !fullName) {
+    if (!email || !fullName) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields: email and fullName' },
         { status: 400 }
       );
     }
 
     await connectDB();
 
+    // Check if user already exists
+    const existingUser = await User.findOne({ clerkId: userId });
+    if (existingUser) {
+      return NextResponse.json(
+        { error: 'User already exists' },
+        { status: 409 }
+      );
+    }
+
+    // Create new user
     const user = await User.create({
-      clerkId,
+      clerkId: userId,
       email,
       fullName,
-      avatar_url,
-      phone,
       role,
-      last_sign_in_at: last_sign_in_at ? new Date(last_sign_in_at) : undefined
+      created_at: new Date(),
+      updated_at: new Date(),
     });
 
-    return NextResponse.json(user, { status: 201 });
+    console.log('User created successfully:', user._id);
+
+    return NextResponse.json({
+      success: true,
+      user: {
+        id: user._id,
+        clerkId: user.clerkId,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role
+      }
+    }, { status: 201 });
   } catch (error) {
+    console.error('Error creating user:', error);
     if (error instanceof Error) {
       if (error.message.includes('duplicate key')) {
         return NextResponse.json(
@@ -125,54 +164,51 @@ export async function POST(req: Request) {
 }
 
 export async function PUT(req: Request) {
-  try {
-    const { 
-      clerkId,
-      email, 
-      fullName,
-      avatar_url,
-      phone,
-      role,
-      last_sign_in_at
-    } = await req.json();
+  return withUserAuth(req as NextRequest, async (authenticatedReq, user) => {
+    try {
+      const { 
+        email, 
+        fullName,
+        avatar_url,
+        phone,
+        role,
+        last_sign_in_at
+      } = await req.json();
 
-    if (!clerkId) {
+      await connectDB();
+
+      const updateData: Record<string, unknown> = {};
+      if (email) updateData.email = email;
+      if (fullName) updateData.fullName = fullName;
+      if (avatar_url) updateData.avatar_url = avatar_url;
+      if (phone) updateData.phone = phone;
+      if (role) updateData.role = role;
+      if (last_sign_in_at) updateData.last_sign_in_at = new Date(last_sign_in_at);
+      updateData.updated_at = new Date();
+
+      const updatedUser = await User.findByIdAndUpdate(
+        user._id,
+        { $set: updateData },
+        { new: true }
+      );
+
+      if (!updatedUser) {
+        return NextResponse.json(
+          { error: 'User not found' },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        user: updatedUser
+      });
+    } catch (error: unknown) {
+      console.log(error);
       return NextResponse.json(
-        { error: 'Clerk ID is required' },
-        { status: 400 }
+        { error: 'Internal server error' },
+        { status: 500 }
       );
     }
-
-    await connectDB();
-
-    const updateData: Record<string, unknown> = {};
-    if (email) updateData.email = email;
-    if (fullName) updateData.fullName = fullName;
-    if (avatar_url) updateData.avatar_url = avatar_url;
-    if (phone) updateData.phone = phone;
-    if (role) updateData.role = role;
-    if (last_sign_in_at) updateData.last_sign_in_at = new Date(last_sign_in_at);
-    updateData.updatedAt = new Date();
-
-    const user = await User.findOneAndUpdate(
-      { clerkId },
-      { $set: updateData },
-      { new: true }
-    );
-
-    if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json(user);
-  } catch (error: unknown) {
-    console.log(error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
+  });
 }
