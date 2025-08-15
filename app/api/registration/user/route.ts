@@ -76,6 +76,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: Request) {
   try {
     console.log('=== User Creation API Started ===');
+    console.log('🔄 Using updated user creation logic v2.0'); // Force redeployment
     
     // Parse request body first
     const { 
