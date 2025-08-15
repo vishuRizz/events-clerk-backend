@@ -77,23 +77,7 @@ export async function POST(req: Request) {
   try {
     console.log('=== User Creation API Started ===');
     
-    // Get the Clerk user ID from the request
-    let userId: string | null = null;
-    
-    try {
-      const authResult = await auth();
-      userId = authResult.userId;
-      console.log('✅ Clerk auth successful, userId:', userId);
-    } catch (clerkError) {
-      console.error('❌ Clerk auth error:', clerkError);
-      
-      // For now, allow user creation without authentication
-      // This is a temporary fix until the backend is properly deployed
-      console.log('⚠️ Allowing user creation without authentication (temporary)');
-      userId = 'temp_user_' + Date.now(); // Generate a temporary ID
-      console.log('📝 Generated temporary userId:', userId);
-    }
-
+    // Parse request body first
     const { 
       email, 
       fullName,
@@ -109,6 +93,38 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+    
+    // Get the Clerk user ID from the request
+    let userId: string;
+    
+    try {
+      const authResult = await auth();
+      userId = authResult.userId || '';
+      console.log('✅ Clerk auth successful, userId:', userId);
+      
+      // If Clerk auth succeeded but userId is empty, generate temporary ID
+      if (!userId) {
+        console.log('⚠️ Clerk auth succeeded but userId is empty, generating temporary ID');
+        userId = 'temp_user_' + email.replace(/[^a-zA-Z0-9]/g, '_') + '_' + Date.now();
+        console.log('📝 Generated temporary userId:', userId);
+      }
+    } catch (clerkError) {
+      console.error('❌ Clerk auth error:', clerkError);
+      
+      // For now, allow user creation without authentication
+      // This is a temporary fix until the backend is properly deployed
+      console.log('⚠️ Allowing user creation without authentication (temporary)');
+      userId = 'temp_user_' + email.replace(/[^a-zA-Z0-9]/g, '_') + '_' + Date.now(); // Generate a unique temporary ID
+      console.log('📝 Generated temporary userId:', userId);
+    }
+
+    if (!userId) {
+      console.log('❌ No userId available');
+      return NextResponse.json(
+        { error: 'User ID not available' },
+        { status: 400 }
+      );
+    }
 
     console.log('🔌 Connecting to database...');
     await connectDB();
@@ -119,12 +135,20 @@ export async function POST(req: Request) {
     console.log('- Searching by clerkId:', userId);
     console.log('- Searching by email:', email);
     
-    let existingUser = await User.findOne({ 
-      $or: [
-        { clerkId: userId },
-        { email: email }
-      ]
-    });
+    // First, check by email (most reliable)
+    let existingUser = await User.findOne({ email: email });
+    
+    if (existingUser) {
+      console.log('🔍 Found user by email:', existingUser._id);
+    } else {
+      // If not found by email, check by clerkId (but only if it's not a temporary ID)
+      if (userId && !userId.startsWith('temp_user_')) {
+        existingUser = await User.findOne({ clerkId: userId });
+        if (existingUser) {
+          console.log('🔍 Found user by clerkId:', existingUser._id);
+        }
+      }
+    }
 
     console.log('🔍 Search result:', {
       userFound: !!existingUser,
@@ -134,34 +158,40 @@ export async function POST(req: Request) {
     });
 
     if (existingUser) {
-      console.log('📝 User already exists, updating with new data:', existingUser._id);
-      
-      // Update the existing user with new information
-      const updatedUser = await User.findByIdAndUpdate(
-        existingUser._id,
-        {
-          clerkId: userId, // Update with current clerkId
-          email: email,
-          fullName: fullName,
-          role: role,
-          updated_at: new Date(),
-        },
-        { new: true }
-      );
+      // Only update if it's the same user (same email)
+      if (existingUser.email === email) {
+        console.log('📝 User already exists, updating with new data:', existingUser._id);
+        
+        // Update the existing user with new information
+        const updatedUser = await User.findByIdAndUpdate(
+          existingUser._id,
+          {
+            clerkId: userId, // Update with current clerkId
+            email: email,
+            fullName: fullName,
+            role: role,
+            updated_at: new Date(),
+          },
+          { new: true }
+        );
 
-      console.log('✅ User updated successfully:', updatedUser._id);
+        console.log('✅ User updated successfully:', updatedUser._id);
 
-      return NextResponse.json({
-        success: true,
-        user: {
-          id: updatedUser._id,
-          clerkId: updatedUser.clerkId,
-          email: updatedUser.email,
-          fullName: updatedUser.fullName,
-          role: updatedUser.role
-        },
-        message: 'User updated successfully'
-      }, { status: 200 });
+        return NextResponse.json({
+          success: true,
+          user: {
+            id: updatedUser._id,
+            clerkId: updatedUser.clerkId,
+            email: updatedUser.email,
+            fullName: updatedUser.fullName,
+            role: updatedUser.role
+          },
+          message: 'User updated successfully'
+        }, { status: 200 });
+      } else {
+        // Different user with same clerkId (temporary ID collision)
+        console.log('⚠️ Different user found with same clerkId, creating new user');
+      }
     }
 
     // Create new user if doesn't exist

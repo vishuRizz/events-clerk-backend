@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Event from '@/models/Event';
+import Organization from '@/models/Organization'; // Import Organization model
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,14 +26,14 @@ export async function GET(req: NextRequest) {
     
     if (search) {
       query.$or = [
-        { title: { $regex: search, $options: 'i' } },
+        { name: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } },
-        { venue: { $regex: search, $options: 'i' } }
+        { 'venue.name': { $regex: search, $options: 'i' } }
       ];
     }
     
     if (category) {
-      query.category = category;
+      query.event_type = category;
     }
     
     if (location) {
@@ -45,12 +46,23 @@ export async function GET(req: NextRequest) {
     const skip = (page - 1) * limit;
 
     console.log('📊 Fetching events...');
-    // Get events with pagination
-    const events = await Event.find(query)
-      .populate('organization', 'name logo_url')
-      .sort({ start_time: 1 })
-      .skip(skip)
-      .limit(limit);
+    // Get events with pagination - handle organization population gracefully
+    let events;
+    try {
+      events = await Event.find(query)
+        .populate('organization', 'name logo_url')
+        .sort({ start_time: 1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(); // Convert to plain objects for better performance
+    } catch (populateError) {
+      console.log('⚠️ Organization population failed, fetching without populate:', populateError);
+      events = await Event.find(query)
+        .sort({ start_time: 1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+    }
 
     console.log('✅ Events fetched successfully, count:', events.length);
 
@@ -77,69 +89,13 @@ export async function GET(req: NextRequest) {
     console.error('❌ Error details:', error);
     console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     
-    // Return mock data if database fails
-    console.log('🔄 Returning mock data as fallback...');
-    const mockEvents = [
-      {
-        _id: 'mock_event_1',
-        name: 'Tech Conference 2024',
-        description: 'Annual technology conference featuring the latest innovations',
-        start_time: new Date('2024-12-15T09:00:00Z'),
-        end_time: new Date('2024-12-15T17:00:00Z'),
-        venue: {
-          name: 'Convention Center',
-          address: '123 Main St',
-          city: 'San Francisco',
-          state: 'CA',
-          country: 'USA',
-          postal_code: '94105'
-        },
-        is_online: false,
-        price: 0,
-        is_free: true,
-        event_type: 'conference',
-        max_capacity: 500,
-        organization: {
-          _id: 'mock_org_1',
-          name: 'Tech Events Inc'
-        }
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to fetch events',
+        timestamp: new Date().toISOString()
       },
-      {
-        _id: 'mock_event_2',
-        name: 'Startup Meetup',
-        description: 'Monthly startup networking event',
-        start_time: new Date('2024-12-20T18:00:00Z'),
-        end_time: new Date('2024-12-20T21:00:00Z'),
-        venue: {
-          name: 'Innovation Hub',
-          address: '456 Startup Ave',
-          city: 'San Francisco',
-          state: 'CA',
-          country: 'USA',
-          postal_code: '94102'
-        },
-        is_online: false,
-        price: 25,
-        is_free: false,
-        event_type: 'meetup',
-        max_capacity: 100,
-        organization: {
-          _id: 'mock_org_2',
-          name: 'Startup Community'
-        }
-      }
-    ];
-
-    return NextResponse.json({
-      success: true,
-      data: mockEvents,
-      pagination: {
-        page: 1,
-        limit: 10,
-        total: 2,
-        pages: 1
-      },
-      message: 'Events fetched successfully (mock data)'
-    });
+      { status: 500 }
+    );
   }
 }
