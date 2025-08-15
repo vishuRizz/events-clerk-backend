@@ -4,7 +4,11 @@ import Event from '@/models/Event';
 
 export async function GET(req: NextRequest) {
   try {
+    console.log('=== Events API Started ===');
+    
+    console.log('🔌 Connecting to database...');
     await connectDB();
+    console.log('✅ Database connected');
 
     // Get query parameters
     const { searchParams } = new URL(req.url);
@@ -13,6 +17,8 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get('search') || '';
     const category = searchParams.get('category') || '';
     const location = searchParams.get('location') || '';
+
+    console.log('📋 Query parameters:', { page, limit, search, category, location });
 
     // Build query
     const query: any = {};
@@ -33,9 +39,12 @@ export async function GET(req: NextRequest) {
       query['venue.city'] = { $regex: location, $options: 'i' };
     }
 
+    console.log('🔍 Query built:', JSON.stringify(query, null, 2));
+
     // Calculate skip value for pagination
     const skip = (page - 1) * limit;
 
+    console.log('📊 Fetching events...');
     // Get events with pagination
     const events = await Event.find(query)
       .populate('organization', 'name logo_url')
@@ -43,8 +52,13 @@ export async function GET(req: NextRequest) {
       .skip(skip)
       .limit(limit);
 
+    console.log('✅ Events fetched successfully, count:', events.length);
+
     // Get total count for pagination
     const total = await Event.countDocuments(query);
+    console.log('📊 Total events count:', total);
+
+    console.log('=== Events API Completed Successfully ===');
 
     return NextResponse.json({
       success: true,
@@ -59,9 +73,12 @@ export async function GET(req: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error fetching events:', error);
+    console.error('=== Events API Failed ===');
+    console.error('❌ Error details:', error);
+    console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     
     // Return mock data if database fails
+    console.log('🔄 Returning mock data as fallback...');
     const mockEvents = [
       {
         _id: 'mock_event_1',

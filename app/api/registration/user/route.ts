@@ -75,20 +75,23 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: Request) {
   try {
+    console.log('=== User Creation API Started ===');
+    
     // Get the Clerk user ID from the request
     let userId: string | null = null;
     
     try {
       const authResult = await auth();
       userId = authResult.userId;
-      console.log('Clerk auth successful, userId:', userId);
+      console.log('✅ Clerk auth successful, userId:', userId);
     } catch (clerkError) {
-      console.error('Clerk auth error:', clerkError);
+      console.error('❌ Clerk auth error:', clerkError);
       
       // For now, allow user creation without authentication
       // This is a temporary fix until the backend is properly deployed
-      console.log('Allowing user creation without authentication (temporary)');
+      console.log('⚠️ Allowing user creation without authentication (temporary)');
       userId = 'temp_user_' + Date.now(); // Generate a temporary ID
+      console.log('📝 Generated temporary userId:', userId);
     }
 
     const { 
@@ -97,25 +100,72 @@ export async function POST(req: Request) {
       role = 'user'
     } = await req.json();
 
+    console.log('📋 Request data:', { email, fullName, role });
+
     if (!email || !fullName) {
+      console.log('❌ Missing required fields');
       return NextResponse.json(
         { error: 'Missing required fields: email and fullName' },
         { status: 400 }
       );
     }
 
+    console.log('🔌 Connecting to database...');
     await connectDB();
+    console.log('✅ Database connected');
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ clerkId: userId });
+    // Check if user already exists by email or clerkId
+    console.log('🔍 Checking for existing user...');
+    console.log('- Searching by clerkId:', userId);
+    console.log('- Searching by email:', email);
+    
+    let existingUser = await User.findOne({ 
+      $or: [
+        { clerkId: userId },
+        { email: email }
+      ]
+    });
+
+    console.log('🔍 Search result:', {
+      userFound: !!existingUser,
+      userId: existingUser?._id,
+      existingClerkId: existingUser?.clerkId,
+      existingEmail: existingUser?.email
+    });
+
     if (existingUser) {
-      return NextResponse.json(
-        { error: 'User already exists' },
-        { status: 409 }
+      console.log('📝 User already exists, updating with new data:', existingUser._id);
+      
+      // Update the existing user with new information
+      const updatedUser = await User.findByIdAndUpdate(
+        existingUser._id,
+        {
+          clerkId: userId, // Update with current clerkId
+          email: email,
+          fullName: fullName,
+          role: role,
+          updated_at: new Date(),
+        },
+        { new: true }
       );
+
+      console.log('✅ User updated successfully:', updatedUser._id);
+
+      return NextResponse.json({
+        success: true,
+        user: {
+          id: updatedUser._id,
+          clerkId: updatedUser.clerkId,
+          email: updatedUser.email,
+          fullName: updatedUser.fullName,
+          role: updatedUser.role
+        },
+        message: 'User updated successfully'
+      }, { status: 200 });
     }
 
-    // Create new user
+    // Create new user if doesn't exist
+    console.log('🆕 Creating new user...');
     const user = await User.create({
       clerkId: userId,
       email,
@@ -125,7 +175,7 @@ export async function POST(req: Request) {
       updated_at: new Date(),
     });
 
-    console.log('User created successfully:', user._id);
+    console.log('✅ User created successfully:', user._id);
 
     return NextResponse.json({
       success: true,
@@ -135,12 +185,17 @@ export async function POST(req: Request) {
         email: user.email,
         fullName: user.fullName,
         role: user.role
-      }
+      },
+      message: 'User created successfully'
     }, { status: 201 });
   } catch (error) {
-    console.error('Error creating user:', error);
+    console.error('=== User Creation API Failed ===');
+    console.error('❌ Error details:', error);
+    console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    
     if (error instanceof Error) {
       if (error.message.includes('duplicate key')) {
+        console.log('🔍 Duplicate key error detected');
         return NextResponse.json(
           { error: 'User already exists' },
           { status: 409 }
