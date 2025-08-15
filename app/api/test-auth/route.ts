@@ -13,6 +13,16 @@ export async function GET(req: NextRequest) {
     
     console.log('📋 Request headers:', headers);
     
+    // Check for Authorization header specifically
+    const authHeader = req.headers.get('authorization');
+    console.log('🔑 Authorization header:', authHeader);
+    
+    if (authHeader) {
+      console.log('🔑 Auth header type:', typeof authHeader);
+      console.log('🔑 Auth header length:', authHeader.length);
+      console.log('🔑 Auth header starts with Bearer:', authHeader.startsWith('Bearer '));
+    }
+    
     // Try to get auth
     try {
       const authResult = await auth();
@@ -20,7 +30,7 @@ export async function GET(req: NextRequest) {
         userId: authResult.userId,
         sessionId: authResult.sessionId,
         actor: authResult.actor,
-        sessionClaims: authResult.sessionClaims
+        hasSessionClaims: !!authResult.sessionClaims
       });
       
       return NextResponse.json({
@@ -31,7 +41,12 @@ export async function GET(req: NextRequest) {
           sessionId: authResult.sessionId,
           hasSessionClaims: !!authResult.sessionClaims
         },
-        headers: headers
+        headers: {
+          authorization: authHeader,
+          hasAuthHeader: !!authHeader,
+          authHeaderType: typeof authHeader,
+          authHeaderLength: authHeader?.length
+        }
       });
     } catch (authError) {
       console.error('❌ Auth failed:', authError);
@@ -40,7 +55,12 @@ export async function GET(req: NextRequest) {
         success: false,
         message: 'Authentication failed',
         error: authError instanceof Error ? authError.message : 'Unknown error',
-        headers: headers
+        headers: {
+          authorization: authHeader,
+          hasAuthHeader: !!authHeader,
+          authHeaderType: typeof authHeader,
+          authHeaderLength: authHeader?.length
+        }
       }, { status: 401 });
     }
   } catch (error) {
