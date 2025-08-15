@@ -131,24 +131,15 @@ export async function POST(req: Request) {
     await connectDB();
     console.log('✅ Database connected');
 
-    // Check if user already exists by email or clerkId
+    // Check if user already exists by email only (most reliable)
     console.log('🔍 Checking for existing user...');
-    console.log('- Searching by clerkId:', userId);
     console.log('- Searching by email:', email);
     
-    // First, check by email (most reliable)
+    // Only check by email to avoid issues with null clerkId
     let existingUser = await User.findOne({ email: email });
     
     if (existingUser) {
-      console.log('🔍 Found user by email:', existingUser._id);
-    } else {
-      // If not found by email, check by clerkId (but only if it's not a temporary ID)
-      if (userId && !userId.startsWith('temp_user_')) {
-        existingUser = await User.findOne({ clerkId: userId });
-        if (existingUser) {
-          console.log('🔍 Found user by clerkId:', existingUser._id);
-        }
-      }
+      console.log('🔍 Found user by email:', existingUser._id, 'with clerkId:', existingUser.clerkId);
     }
 
     console.log('🔍 Search result:', {
@@ -189,36 +180,73 @@ export async function POST(req: Request) {
           },
           message: 'User updated successfully'
         }, { status: 200 });
-      } else {
-        // Different user with same clerkId (temporary ID collision)
-        console.log('⚠️ Different user found with same clerkId, creating new user');
       }
     }
 
     // Create new user if doesn't exist
     console.log('🆕 Creating new user...');
-    const user = await User.create({
-      clerkId: userId,
-      email,
-      fullName,
-      role,
-      created_at: new Date(),
-      updated_at: new Date(),
-    });
+    
+    try {
+      const user = await User.create({
+        clerkId: userId,
+        email: email,
+        fullName: fullName,
+        role: role,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
 
-    console.log('✅ User created successfully:', user._id);
+      console.log('✅ User created successfully:', user._id);
 
-    return NextResponse.json({
-      success: true,
-      user: {
-        id: user._id,
-        clerkId: user.clerkId,
-        email: user.email,
-        fullName: user.fullName,
-        role: user.role
-      },
-      message: 'User created successfully'
-    }, { status: 201 });
+      return NextResponse.json({
+        success: true,
+        user: {
+          id: user._id,
+          clerkId: user.clerkId,
+          email: user.email,
+          fullName: user.fullName,
+          role: user.role
+        },
+        message: 'User created successfully'
+      }, { status: 201 });
+    } catch (createError: any) {
+      console.error('❌ User creation failed:', createError);
+      
+      // Handle duplicate key error (old supabaseId index)
+      if (createError.code === 11000) {
+        console.log('⚠️ Duplicate key error detected, trying to find existing user');
+        
+        // Try to find the user by email
+        const existingUser = await User.findOne({ email: email });
+        if (existingUser) {
+          console.log('✅ Found existing user, updating clerkId:', existingUser._id);
+          
+          // Update the existing user with the new clerkId
+          const updatedUser = await User.findByIdAndUpdate(
+            existingUser._id,
+            {
+              clerkId: userId,
+              updatedAt: new Date()
+            },
+            { new: true }
+          );
+
+          return NextResponse.json({
+            success: true,
+            user: {
+              id: updatedUser._id,
+              clerkId: updatedUser.clerkId,
+              email: updatedUser.email,
+              fullName: updatedUser.fullName,
+              role: updatedUser.role
+            },
+            message: 'User updated successfully'
+          }, { status: 200 });
+        }
+      }
+      
+      throw createError;
+    }
   } catch (error) {
     console.error('=== User Creation API Failed ===');
     console.error('❌ Error details:', error);
