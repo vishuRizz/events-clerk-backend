@@ -82,10 +82,11 @@ export async function POST(req: Request) {
     const { 
       email, 
       fullName,
-      role = 'user'
+      role = 'user',
+      phone
     } = await req.json();
 
-    console.log('📋 Request data:', { email, fullName, role });
+    console.log('📋 Request data:', { email, fullName, role, phone });
 
     if (!email || !fullName) {
       console.log('❌ Missing required fields');
@@ -162,6 +163,7 @@ export async function POST(req: Request) {
             email: email,
             fullName: fullName,
             role: role,
+            phone: phone, // Add phone to update
             updated_at: new Date(),
           },
           { new: true }
@@ -192,6 +194,7 @@ export async function POST(req: Request) {
         email: email,
         fullName: fullName,
         role: role,
+        phone: phone, // Add phone to new user
         createdAt: new Date(),
         updatedAt: new Date()
       });

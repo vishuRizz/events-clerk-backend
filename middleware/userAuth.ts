@@ -48,7 +48,7 @@ export async function withUserAuth(
       const newUser = new User({
         clerkId: userId,
         email: `user_${userId}@temp.com`, // Temporary email to satisfy validation
-        fullName: `User ${userId}`, // Temporary name to satisfy validation
+        fullName: 'New User', // Simple temporary name
         role: 'user',
         registered_events: [],
         created_at: new Date(),
