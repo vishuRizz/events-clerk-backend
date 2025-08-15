@@ -44,33 +44,41 @@ export async function withUserAuth(
     if (!user) {
       console.log('User not found in database, creating new user with clerkId:', userId);
       
-      // Create a basic user with the clerkId
+      // Create a basic user with the clerkId and required fields
       const newUser = new User({
         clerkId: userId,
-        email: '', // Will be updated when user completes profile
-        fullName: '', // Will be updated when user completes profile
+        email: `user_${userId}@temp.com`, // Temporary email to satisfy validation
+        fullName: `User ${userId}`, // Temporary name to satisfy validation
         role: 'user',
         registered_events: [],
         created_at: new Date(),
         updated_at: new Date(),
       });
 
-      await newUser.save();
-      console.log('New user created:', newUser._id);
-      
-      // Create a new headers object with the new user ID
-      const newHeaders = new Headers(req.headers);
-      newHeaders.set('x-user-id', newUser._id.toString());
-      
-      // Create a new request with the modified headers
-      const newRequest = new NextRequest(req.url, {
-        method: req.method,
-        headers: newHeaders,
-        body: req.body
-      });
+      try {
+        await newUser.save();
+        console.log('New user created:', newUser._id);
+        
+        // Create a new headers object with the new user ID
+        const newHeaders = new Headers(req.headers);
+        newHeaders.set('x-user-id', newUser._id.toString());
+        
+        // Create a new request with the modified headers
+        const newRequest = new NextRequest(req.url, {
+          method: req.method,
+          headers: newHeaders,
+          body: req.body
+        });
 
-      // Call the handler function with the new user
-      return handler(newRequest, newUser);
+        // Call the handler function with the new user
+        return handler(newRequest, newUser);
+      } catch (saveError) {
+        console.error('Error saving new user:', saveError);
+        return NextResponse.json(
+          { error: 'Failed to create user profile' },
+          { status: 500 }
+        );
+      }
     }
 
     console.log('✅ User found in database:', user._id);
