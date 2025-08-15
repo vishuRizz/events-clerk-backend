@@ -4,7 +4,7 @@ import { connectDB } from '@/lib/mongodb';
 import User from '@/models/User';
 
 /**
- * Middleware to verify Clerk access token and authenticate the user
+ * Middleware to verify Clerk JWT token and authenticate the user
  * @param req The incoming request
  * @param handler The handler function to execute if the user is authenticated
  */
@@ -13,16 +13,26 @@ export async function withUserAuth(
   handler: (req: NextRequest, user: any) => Promise<NextResponse>
 ) {
   try {
-    // Get the Clerk user ID from the request
+    console.log('=== withUserAuth middleware started ===');
+    
+    // Get the authorization header
+    const authHeader = req.headers.get('authorization');
+    console.log('🔑 Auth header:', authHeader ? 'present' : 'missing');
+    
+    // Use auth() which should work with JWT tokens from the frontend
     const { userId } = await auth();
+    console.log('🔑 auth() result - userId:', userId);
 
     // If no user ID is provided, return a 401 Unauthorized response
     if (!userId) {
+      console.log('❌ No userId found, returning 401');
       return NextResponse.json(
         { error: 'Unauthorized - Missing access token' },
         { status: 401 }
       );
     }
+
+    console.log('✅ User authenticated, userId:', userId);
 
     // Connect to the database
     await connectDB();
@@ -62,6 +72,8 @@ export async function withUserAuth(
       // Call the handler function with the new user
       return handler(newRequest, newUser);
     }
+
+    console.log('✅ User found in database:', user._id);
 
     // Create a new headers object (Next.js request headers are immutable)
     const newHeaders = new Headers(req.headers);
